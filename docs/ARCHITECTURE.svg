@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <defs>
+    <style>
+      .title { font: 700 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #0b1220; }
+      .subtitle { font: 600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #3b4252; }
+      .box { fill: #ffffff; stroke: #1f2937; stroke-width: 2; }
+      .box-soft { fill: #f8fafc; stroke: #1f2937; stroke-width: 2; }
+      .box-dark { fill: #0b1220; stroke: #0b1220; stroke-width: 2; }
+      .label { font: 700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #0b1220; }
+      .label-inv { font: 700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #f8fafc; }
+      .text { font: 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #111827; }
+      .muted { fill: #4b5563; }
+      .arrow { stroke: #1f2937; stroke-width: 2.5; fill: none; }
+      .dash { stroke-dasharray: 6 6; }
+    </style>
+    <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#1f2937"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="720" fill="#f3f4f6"/>
+  <text class="title" x="40" y="54">Spatial 系统架构（高层）</text>
+  <text class="subtitle" x="40" y="84">Django + 自研文件式表存储 + Pybind11(C++) 算法模块 + Leaflet 前端</text>
+
+  <!-- Client -->
+  <rect class="box" x="40" y="130" width="330" height="250" rx="12"/>
+  <rect class="box-dark" x="40" y="130" width="330" height="44" rx="12"/>
+  <text class="label-inv" x="60" y="160">浏览器（前端）</text>
+  <text class="text" x="60" y="205">- 页面：space_app/templates/map.html</text>
+  <text class="text" x="60" y="230">- Leaflet 地图渲染 / 图层管理</text>
+  <text class="text" x="60" y="255">- 工具栏：选择/拓扑/导出/轨迹/寻路</text>
+  <text class="text" x="60" y="280">- 主题：static/space_app/theme.css + theme.js</text>
+  <text class="text muted" x="60" y="315">可选：底图瓦片（OSM）由浏览器直接请求</text>
+
+  <!-- Django -->
+  <rect class="box" x="430" y="130" width="420" height="250" rx="12"/>
+  <rect class="box-dark" x="430" y="130" width="420" height="44" rx="12"/>
+  <text class="label-inv" x="450" y="160">Django 服务（space_app）</text>
+  <text class="text" x="450" y="205">- 路由：space_app/urls.py</text>
+  <text class="text" x="450" y="230">- 入口：space_app/views.py（HTTP API / 页面）</text>
+  <text class="text" x="450" y="255">- 会话与权限：request.session + 用户体系</text>
+  <text class="text" x="450" y="280">- 业务：SQL、导入/导出、图层 GeoJSON 服务</text>
+  <text class="text" x="450" y="305">- 启停清理：space_app/tmp_store.py（.tmp 生命周期）</text>
+
+  <!-- Python model/storage layer -->
+  <rect class="box-soft" x="430" y="410" width="420" height="250" rx="12"/>
+  <text class="label" x="450" y="445">Python 数据与算法层</text>
+  <text class="text" x="450" y="485">- 注册表/统一入口：space_app/models/manager.py</text>
+  <text class="text" x="450" y="510">- 表存储：space_app/models/table.py（pkl + 属性/geometry）</text>
+  <text class="text" x="450" y="535">- 索引：B+Tree / Hash / R-Tree（部分在 C++）</text>
+  <text class="text" x="450" y="560">- 算法编排：space_app/algorithms/*</text>
+  <text class="text muted" x="450" y="595">注：表是“文件式持久化”，不依赖外部 DB 服务</text>
+
+  <!-- C++ -->
+  <rect class="box" x="890" y="130" width="270" height="250" rx="12"/>
+  <rect class="box-dark" x="890" y="130" width="270" height="44" rx="12"/>
+  <text class="label-inv" x="910" y="160">C++ 扩展（pybind11）</text>
+  <text class="text" x="910" y="205">- space_app/cpp_model/</text>
+  <text class="text" x="910" y="230">- rtree_module（R 树）</text>
+  <text class="text" x="910" y="255">- topology_cpp（拓扑检查/修复）</text>
+  <text class="text" x="910" y="280">- pathfinding_cpp（最短路/KSP）</text>
+  <text class="text" x="910" y="305">- trajectory_cpp（轨迹校正/滤波）</text>
+
+  <!-- Storage -->
+  <rect class="box" x="890" y="410" width="270" height="250" rx="12"/>
+  <rect class="box-dark" x="890" y="410" width="270" height="44" rx="12"/>
+  <text class="label-inv" x="910" y="440">存储（磁盘）</text>
+  <text class="text" x="910" y="485">- 持久化：space_app/table_data/</text>
+  <text class="text" x="910" y="510">  - &lt;user&gt;/&lt;table&gt;/data_table.pkl</text>
+  <text class="text" x="910" y="535">  - rtree_source.geojson / rtree_serialized</text>
+  <text class="text" x="910" y="560">- 运行期：.tmp/</text>
+  <text class="text" x="910" y="585">  - exports/（下载文件）</text>
+  <text class="text" x="910" y="610">  - topology/（临时备份/构建物）</text>
+  <text class="text muted" x="910" y="640">.tmp 仅在服务启动/退出时清理</text>
+
+  <!-- Arrows -->
+  <path class="arrow" marker-end="url(#arrowHead)" d="M370 250 C 400 250, 400 250, 430 250"/>
+  <path class="arrow" marker-end="url(#arrowHead)" d="M430 280 C 400 280, 400 280, 370 280"/>
+
+  <path class="arrow" marker-end="url(#arrowHead)" d="M650 380 C 650 395, 650 395, 650 410"/>
+  <path class="arrow" marker-end="url(#arrowHead)" d="M850 255 C 875 255, 875 255, 890 255"/>
+  <path class="arrow" marker-end="url(#arrowHead)" d="M890 300 C 875 300, 875 300, 850 300"/>
+
+  <path class="arrow" marker-end="url(#arrowHead)" d="M850 535 C 870 535, 870 535, 890 535"/>
+  <path class="arrow" marker-end="url(#arrowHead)" d="M890 575 C 870 575, 870 575, 850 575"/>
+
+  <!-- Optional OSM tiles (client-side) -->
+  <rect class="box-soft" x="40" y="410" width="330" height="120" rx="12"/>
+  <text class="label" x="60" y="445">外部服务（可选）</text>
+  <text class="text" x="60" y="480">- OpenStreetMap 瓦片服务</text>
+  <text class="text muted" x="60" y="505">浏览器直接请求，不经过后端转发</text>
+  <path class="arrow dash" marker-end="url(#arrowHead)" d="M205 380 C 205 395, 205 395, 205 410"/>
+</svg>

@@ -1,0 +1,3823 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  {% load static %}
+  <meta charset="utf-8">
+  <title>地图可视化</title>
+  <link rel="stylesheet" href="{% static 'space_app/theme.css' %}" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root { --left-w: 320px; --right-w: 360px; --attr-h: 0px; --attr-left: 0px; --attr-right: 0px; }
+    html, body { height: 100%; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+    header { background: var(--header); color: var(--headerText); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .nav a { color: #fff; margin-left: 12px; text-decoration: none; }
+    .panel { display: flex; gap: 16px; padding: 16px; background: var(--panel); box-shadow: 0 6px 18px rgba(0,0,0,0.05); }
+    .panel label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+    select { padding: 8px; width: 200px; }
+    .panel .btns { display: flex; gap: 10px; align-items: flex-end; }
+    .panel button { padding: 10px 14px; background: var(--primary); color:#fff; border: 0; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .panel button.secondary { background: var(--secondary); }
+    .panel button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .content { display: flex; gap: 0; padding: 12px; position: relative; min-height: 0; }
+    #map { height: 100%; width: 100%; }
+    .map-wrap { flex: 1; min-width: 0; }
+    .layers { width: var(--left-w); flex: 0 0 var(--left-w); background: var(--panel); border-right: 1px solid var(--border); padding: 12px; overflow: auto; min-width: 0; max-width: 70vw; transition: width 120ms ease; }
+    .tools { width: var(--right-w); flex: 0 0 var(--right-w); background: var(--panel); border-left: 1px solid var(--border); padding: 12px; overflow: auto; min-width: 0; max-width: 70vw; transition: width 120ms ease; }
+    .tools h3 { margin: 0 0 10px; font-size: 14px; color: var(--text); font-weight: 700; }
+    .tools details { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .tools summary { cursor: pointer; font-size: 13px; color: var(--text); font-weight: 600; }
+    .tools .field { margin-top: 10px; }
+    .tools .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    .tools input[type="text"], .tools input[type="file"] { width: 100%; box-sizing: border-box; }
+    .tools .btnrow { display:flex; gap:8px; margin-top:10px; flex-wrap: wrap; }
+    .tools button { padding: 8px 10px; background: var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:12px; }
+    .tools button.secondary { background: var(--secondary); }
+    .tools .status { margin-top: 8px; font-size: 12px; color: #333; white-space: pre-wrap; }
+    .layers h3 { margin: 0 0 10px; font-size: 14px; color: var(--text); font-weight: 700; }
+    .layers .actions { display: flex; gap: 8px; margin-bottom: 10px; }
+    .layers button { padding: 8px 10px; background: var(--primary); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+    .layers button.secondary { background: var(--secondary); }
+    .sidehead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .sidehead h3 { margin: 0; }
+    .sidehead button { padding: 6px 8px; font-size: 12px; }
+    .resize-handle { flex: 0 0 8px; cursor: col-resize; background: var(--panel2); border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+    .resize-handle.hidden { display: none; }
+    .sidebar-collapsed { width: 0 !important; flex-basis: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; }
+    .sidebar-collapsed > * { display: none !important; }
+    .sidebar-tab { position: absolute; top: 80px; z-index: 1000; padding: 8px 10px; background: var(--primary); color: #fff; border: 0; cursor: pointer; font-size: 12px; opacity: 0.92; }
+    .sidebar-tab.hidden { display: none; }
+    .sidebar-tab.left { left: 12px; border-radius: 0 8px 8px 0; }
+    .sidebar-tab.right { right: 12px; border-radius: 8px 0 0 8px; }
+    .layer-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .layer-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .layer-title label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--text); flex: 1 1 auto; min-width: 0; }
+    .layer-title label span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .layer-title button { flex: 0 0 auto; }
+    .layer-meta { margin-top: 6px; font-size: 12px; color: #666; }
+    body { display: flex; flex-direction: column; height: 100vh; }
+    header { flex: 0 0 auto; }
+    .wrap { flex: 1 1 auto; width: 100%; max-width: none; margin: 0; background: var(--panel); border-radius: 0; overflow: hidden; box-shadow: none; display: flex; flex-direction: column; position: relative; }
+    .content { flex: 1 1 auto; min-height: 0; }
+    .map-wrap { height: 100%; }
+
+    /* Layer list context menu */
+    .ctx-menu { position: fixed; z-index: 2000; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px; box-shadow: 0 10px 24px var(--shadow); min-width: 220px; }
+    .ctx-menu.hidden { display: none; }
+	    .ctx-menu button { width: 100%; text-align: left; padding: 8px 10px; border: 0; background: transparent; cursor: pointer; border-radius: 8px; font-size: 12px; }
+	    .ctx-menu button:hover { background: var(--panel2); }
+	    .ctx-menu .sep { height: 1px; background: var(--border); margin: 6px 0; }
+
+	    /* Attribute-select conditions */
+	    .attr-conds { display: flex; flex-direction: column; gap: 8px; }
+	    .attr-cond-row { display: flex; align-items: center; gap: 8px; }
+	    .attr-cond-row select, .attr-cond-row input { min-width: 0; }
+	    .attr-cond-join { flex: 0 0 92px; width: 92px; }
+	    .attr-cond-field { flex: 1 1 180px; width: auto; }
+	    .attr-cond-op { flex: 0 0 170px; width: 170px; }
+	    .attr-cond-value { flex: 1 1 180px; width: auto; }
+	    .attr-cond-remove { flex: 0 0 auto; padding: 6px 8px; border-radius: 8px; }
+	    .attr-cond-addrow { display: flex; justify-content: flex-end; margin-top: 8px; }
+	    .attr-cond-add { width: 34px; height: 34px; padding: 0; border-radius: 10px; font-size: 18px; line-height: 1; }
+
+	    /* Attribute table dock (bottom) */
+	    .attrdock-tab { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 1500; padding: 8px 12px; background: var(--primary); color: #fff; border: 0; border-radius: 999px; cursor: pointer; font-size: 12px; opacity: 0.92; }
+	    .attrdock-tab.hidden { display: none; }
+	    .attrdock { position: absolute; left: var(--attr-left); right: var(--attr-right); bottom: 0; height: var(--attr-h); min-height: 0; background: var(--panel); border-top: 1px solid var(--border); box-shadow: 0 -10px 24px var(--shadow); z-index: 1400; display: flex; flex-direction: column; }
+    .attrdock.fullwidth { left: 0 !important; right: 0 !important; }
+    .attrdock.collapsed { height: 0 !important; border-top: 0 !important; box-shadow: none !important; pointer-events: none; }
+    .attrdock-handle { flex: 0 0 10px; cursor: row-resize; background: linear-gradient(var(--panel), var(--panel2)); border-bottom: 1px solid var(--border); }
+    .attrdock-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; gap: 10px; border-bottom: 1px solid var(--border); min-height: 38px; }
+    .attrdock-tabs { display: flex; gap: 8px; overflow: auto; min-width: 0; }
+    .attrdock-tabbtn { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel2); border-radius: 999px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+    .attrdock-tabbtn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .attrdock-tabbtn .x { display: inline-block; padding: 0 6px; border-radius: 999px; background: rgba(0,0,0,0.08); }
+    .attrdock-tabbtn.active .x { background: rgba(255,255,255,0.22); }
+    .attrdock-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+    .attrdock-actions button { padding: 6px 8px; font-size: 12px; background: var(--secondary); color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+    .attrdock-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .attrdock-status { padding: 8px 10px; font-size: 12px; color: #333; white-space: pre-wrap; }
+    .attrdock-tablewrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .attrdock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .attrdock-table th, .attrdock-table td { border-bottom: 1px solid var(--border); padding: 6px 8px; vertical-align: top; }
+    .attrdock-table th { position: sticky; top: 0; background: var(--panel2); z-index: 1; text-align: left; }
+    .attrdock-pager { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px; }
+    .attrdock-pager button { padding: 6px 8px; background: var(--primary); color: #fff; border: 0; border-radius: 8px; cursor: pointer; font-size: 12px; }
+    .attrdock-pager button.secondary { background: var(--secondary); }
+
+    /* Dark basemap fallback: CSS filter on OSM tiles (only for the basemap tile layer). */
+    :root[data-theme="dark"] .leaflet-tile.tile-dark-filter{
+      filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(1.05) saturate(0.75);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>地图可视化</div>
+    <div class="nav">
+      <span>用户：{{ user }}</span>
+      <button class="theme-toggle" type="button" data-theme-toggle>暗色</button>
+      <a href="{% url 'map' %}">地图</a>
+      <a href="{% url 'sql' %}">SQL</a>
+      <a href="{% url 'docs' %}">文档</a>
+      <a href="{% url 'logout' %}">退出</a>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="panel">
+      <div>
+        <label for="table">选择表</label>
+        <select id="table"></select>
+      </div>
+      <div>
+        <label for="lon">经度字段</label>
+        <select id="lon"></select>
+      </div>
+      <div>
+        <label for="lat">纬度字段</label>
+        <select id="lat"></select>
+      </div>
+      <div class="btns">
+        <button id="loadBtn" type="button">加载数据</button>
+        <button id="basemapBtn" class="secondary" type="button">加载底图</button>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-left: 6px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin:0;">
+          <input id="loadBbox" type="checkbox" />
+          仅加载当前视野
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin:0;">
+          最大要素数
+          <input id="loadLimit" type="text" value="" placeholder="空=全部" style="width:92px; padding:6px 8px; border-radius:8px;" />
+        </label>
+      </div>
+    </div>
+    <div class="content">
+      <button id="layersTab" class="sidebar-tab left hidden" type="button">图层 ▸</button>
+      <aside class="layers" id="layersPanel">
+        <div class="sidehead">
+          <h3>图层视图</h3>
+          <button id="layersCollapseBtn" class="secondary" type="button">隐藏</button>
+        </div>
+        <div class="actions">
+          <button id="clearSelectionAllBtn" class="secondary" type="button">清除选择</button>
+          <button id="clearAllBtn" class="secondary" type="button">清空全部</button>
+        </div>
+        <div id="layerList"></div>
+        <div style="font-size:12px; color:#666; line-height:1.6;">
+          说明：每次点击“加载”会新增一个图层，可叠加显示；
+          取消勾选可隐藏，点击“移除”可删除该图层。
+        </div>
+      </aside>
+      <div id="leftResizeHandle" class="resize-handle" title="拖拽调整图层栏宽度"></div>
+      <div class="map-wrap">
+        <div id="map"></div>
+      </div>
+
+      <div id="rightResizeHandle" class="resize-handle" title="拖拽调整工具栏宽度"></div>
+
+      <aside class="tools" id="toolsPanel">
+        <div class="sidehead">
+          <h3>工具栏</h3>
+          <button id="toolsCollapseBtn" class="secondary" type="button">隐藏</button>
+        </div>
+
+        <details>
+          <summary>从 GeoJSON 导入</summary>
+          <div class="field">
+            <label for="importTable">表名</label>
+            <input id="importTable" type="text" placeholder="例如：roads_new" />
+          </div>
+          <div class="field">
+            <label>选择文件（.geojson/.json）</label>
+            <input id="importFile" type="file" accept=".geojson,.json,application/json" style="display:none;" />
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button id="importFileBtn" class="secondary" type="button">选择文件</button>
+              <div id="importFileName" style="font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 100%;">
+                未选择文件
+              </div>
+            </div>
+          </div>
+          <div class="btnrow">
+            <button id="importBtn" type="button">导入</button>
+          </div>
+          <div id="importStatus" class="status"></div>
+        </details>
+
+        <details>
+          <summary>检查拓扑 / 修复拓扑</summary>
+          <div class="field">
+            <label for="topoTable">线图层（表）</label>
+            <select id="topoTable"></select>
+          </div>
+          <div class="field">
+            <label for="topoOutName">结果图层名</label>
+            <input id="topoOutName" type="text" placeholder="例如：roads_sz_repaired_tmp" />
+            <div style="font-size:12px; color:#666; margin-top:4px;">
+              不勾选持久化：仅本页面临时图层；勾选后会保存为新表。
+            </div>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input id="topoPersist" type="checkbox" />
+            <label for="topoPersist" style="margin:0;">持久化保存为新表（可重新加载验证）</label>
+          </div>
+          <div class="btnrow">
+            <button id="topoCheckBtn" type="button">检查拓扑</button>
+            <button id="topoRepairBtn" type="button">修复拓扑</button>
+            <button id="topoClearBtn" class="secondary" type="button">清除标注</button>
+          </div>
+          <div id="topoStatus" class="status"></div>
+          <div style="font-size:12px; color:#666; line-height:1.6; margin-top:8px;">
+            提示：拓扑检查/修复会在后端临时备份表目录进行，不会修改原始表数据。
+          </div>
+        </details>
+
+	        <details id="attrSelectDetails">
+	          <summary>按属性选择</summary>
+	          <div class="field">
+	            <label for="attrTable">目标图层（表）</label>
+	            <select id="attrTable"></select>
+	          </div>
+	          <div class="field">
+	            <label>条件（字段 + 约束）</label>
+	            <div id="attrConditions" class="attr-conds"></div>
+	            <div class="attr-cond-addrow">
+	              <button id="attrAddCondBtn" class="secondary attr-cond-add" type="button" title="添加约束">+</button>
+	            </div>
+	          </div>
+	          <div class="btnrow">
+	            <button id="attrSelectBtn" type="button">选择</button>
+	            <button id="attrClearBtn" class="secondary" type="button">清除选择</button>
+	          </div>
+	          <div id="attrStatus" class="status"></div>
+	        </details>
+
+        <details id="locSelectDetails">
+          <summary>按位置选择</summary>
+          <div class="field">
+            <label for="locTarget">目标图层（被选中要素来自此图层）</label>
+            <select id="locTarget"></select>
+          </div>
+          <div class="field">
+            <label for="locRef">参照图层（使用其“已选择要素”作为条件）</label>
+            <select id="locRef"></select>
+          </div>
+          <div class="field">
+            <label for="locMode">模式</label>
+            <select id="locMode">
+              <option value="point">距离某个点一定范围内</option>
+              <option value="bbox_intersects">与参照图层已选要素 bbox 相交</option>
+              <option value="circle_from_selected">在参照图层已选要素圆形范围内</option>
+            </select>
+          </div>
+
+          <div class="field" id="locPointFields">
+            <label>点（x,y）与半径（米）</label>
+            <div style="display:flex; gap:8px;">
+              <input id="locX" type="text" placeholder="x(经度)" />
+              <input id="locY" type="text" placeholder="y(纬度)" />
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <input id="locRadius" type="text" placeholder="radius_m 例如：200" />
+              <button id="pickPointBtn" class="secondary" type="button">地图点选</button>
+            </div>
+          </div>
+
+          <div class="btnrow">
+            <button id="locSelectBtn" type="button">选择</button>
+            <button id="locClearBtn" class="secondary" type="button">清除目标选择</button>
+          </div>
+          <div id="locStatus" class="status"></div>
+        </details>
+
+        <details id="sqlToolDetails">
+          <summary>SQL 查询</summary>
+          <div class="field">
+            <label for="sqlTable">表</label>
+            <select id="sqlTable"></select>
+            <div style="font-size:12px; color:var(--muted); margin-top:4px;">
+              仅支持 SELECT；执行后可联动高亮已加载图层中的要素。
+            </div>
+          </div>
+          <div class="field">
+            <label for="sqlText">SQL</label>
+            <textarea id="sqlText" rows="4" style="width:100%; resize:vertical;" placeholder="例如：SELECT * FROM roads_sz LIMIT 50;"></textarea>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input id="sqlLinkSelection" type="checkbox" checked />
+            <label for="sqlLinkSelection" style="margin:0;">执行后联动选择（若该表已加载为图层）</label>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <label for="sqlMaxRows" style="margin:0; white-space:nowrap;">最大返回行数</label>
+            <input id="sqlMaxRows" type="number" min="1" max="500" value="50" style="width:120px;" />
+          </div>
+          <div class="btnrow">
+            <button id="sqlRunBtn" type="button">执行</button>
+            <button id="sqlClearBtn" class="secondary" type="button">清空</button>
+          </div>
+          <div id="sqlStatus" class="status"></div>
+          <div id="sqlResult" style="display:none; max-height:260px; overflow:auto; border:1px solid var(--border); border-radius:8px; margin-top:8px;"></div>
+        </details>
+
+        <details id="exportDetails">
+          <summary>导出要素</summary>
+          <div class="field">
+            <label for="exportTable">源图层（表）</label>
+            <select id="exportTable"></select>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input id="exportToTable" type="checkbox" />
+            <label for="exportToTable" style="margin:0;">导出到表（写入仿真数据库 + 维护 R 树）</label>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input id="exportToGeojson" type="checkbox" />
+            <label for="exportToGeojson" style="margin:0;">导出到 GeoJSON（生成临时文件并下载）</label>
+          </div>
+          <div class="field">
+            <label for="exportOutTable">新表名（导出到表时必填）</label>
+            <input id="exportOutTable" type="text" placeholder="例如：roads_sz_selected" />
+          </div>
+          <div class="btnrow">
+            <button id="exportBtn" type="button">导出</button>
+          </div>
+          <div id="exportStatus" class="status"></div>
+        </details>
+
+        <details id="routeDetails">
+          <summary>最短路径</summary>
+          <div class="field">
+            <label for="routeTable">路网（已持久化线图层）</label>
+            <select id="routeTable"></select>
+            <div style="font-size:12px; color:#666; margin-top:4px;">
+              说明：起点集=2，终点集=2；每对起终点输出 K=2 条候选路径（最多 8 条）。
+            </div>
+          </div>
+          <div class="field">
+            <label>起点 / 终点（地图点选）</label>
+            <div style="display:flex; gap:8px;">
+              <input id="routeStart" type="text" placeholder="起点(x,y)" readonly />
+              <input id="routeEnd" type="text" placeholder="终点(x,y)" readonly />
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button id="routePickStartBtn" class="secondary" type="button">点选起点</button>
+              <button id="routePickEndBtn" class="secondary" type="button">点选终点</button>
+              <button id="routeClearBtn" class="secondary" type="button">清除</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="routeAlgo">算法</label>
+            <select id="routeAlgo">
+              <option value="dijkstra">Dijkstra</option>
+              <option value="astar">A*</option>
+              <option value="floyd">Floyd（回退）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="routeOutName">结果图层名（临时）</label>
+            <input id="routeOutName" type="text" placeholder="例如：routes_tmp" />
+          </div>
+          <div class="btnrow">
+            <button id="routeRunBtn" type="button">寻路</button>
+          </div>
+          <div id="routeStatus" class="status"></div>
+        </details>
+
+        <details id="trajDetails">
+          <summary>轨迹校正</summary>
+          <div class="field">
+            <label for="trajTable">轨迹（已持久化点图层）</label>
+            <select id="trajTable"></select>
+          </div>
+          <div class="field">
+            <label for="trajTimeField">时间字段（推荐：properties.xxx）</label>
+            <input id="trajTimeField" list="trajTimeFieldOptions" type="text" placeholder="例如：properties.定位时间" />
+            <datalist id="trajTimeFieldOptions"></datalist>
+            <div style="font-size:12px; color:#666; margin-top:4px;">
+              时间必须为 ISO（2025-06-25T01:06:31）或 Unix 秒时间戳，且不能为空。
+            </div>
+          </div>
+          <div class="field">
+            <label for="trajRoadTable">路网（已持久化线图层）</label>
+            <select id="trajRoadTable"></select>
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input id="trajUseBbox" type="checkbox" checked />
+            <label for="trajUseBbox" style="margin:0;">仅处理当前地图视野内点（推荐）</label>
+          </div>
+          <div class="field">
+            <label for="trajMaxPoints">最大处理点数（200-100000）</label>
+            <input id="trajMaxPoints" type="text" value="5000" />
+          </div>
+          <div class="field">
+            <label for="trajOutName">结果图层名（临时）</label>
+            <input id="trajOutName" type="text" placeholder="例如：traj_corrected_tmp" />
+          </div>
+          <div class="btnrow">
+            <button id="trajRunBtn" type="button">校正</button>
+          </div>
+          <div id="trajStatus" class="status"></div>
+        </details>
+      </aside>
+      <button id="toolsTab" class="sidebar-tab right hidden" type="button">◂ 工具</button>
+    </div>
+
+    <button id="attrDockTab" class="attrdock-tab hidden" type="button">属性表 ▲</button>
+    <div id="attrDock" class="attrdock collapsed" aria-hidden="true">
+      <div id="attrDockHandle" class="attrdock-handle" title="拖拽调整属性表高度"></div>
+      <div class="attrdock-head">
+        <div id="attrTabs" class="attrdock-tabs"></div>
+        <div class="attrdock-actions">
+          <button id="attrDockWideBtn" type="button">放大</button>
+          <button id="attrDockMinBtn" type="button">隐藏</button>
+          <button id="attrDockCloseAllBtn" type="button">关闭全部</button>
+        </div>
+      </div>
+      <div class="attrdock-body">
+        <div id="attrTableStatus" class="attrdock-status"></div>
+        <div class="attrdock-tablewrap">
+          <table id="attrDockTable" class="attrdock-table"></table>
+        </div>
+        <div class="attrdock-pager">
+          <div id="attrPagerInfo"></div>
+          <div style="display:flex; gap:8px;">
+            <label style="display:flex; align-items:center; gap:6px;">
+              <span style="color:var(--muted);">每页</span>
+              <select id="attrPageSize" style="padding:6px; border:1px solid var(--border); border-radius:8px; font-size:12px;">
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="150">150</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <button id="attrPrevBtn" class="secondary" type="button">上一页</button>
+            <button id="attrNextBtn" type="button">下一页</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="layerCtxMenu" class="ctx-menu hidden">
+      <button type="button" data-action="open_attr">查看属性表</button>
+      <button type="button" data-action="open_export">导出已选择要素</button>
+      <button type="button" data-action="select_all">全选要素</button>
+      <button type="button" data-action="clear_sel">清除该图层选择</button>
+      <button type="button" data-action="zoom_to">缩放至该图层</button>
+      <button type="button" data-action="remove_layer">移除图层</button>
+      <div class="sep"></div>
+      <button type="button" data-action="set_attr_target">设为按属性选择目标</button>
+      <button type="button" data-action="set_loc_target">设为按位置选择目标</button>
+      <button type="button" data-action="set_loc_ref">设为按位置选择参照</button>
+    </div>
+  </div>
+
+  {{ tables|json_script:"tables-data" }}
+  <script defer src="{% static 'space_app/theme.js' %}"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const currentUser = "{{ user|escapejs }}";
+    const geojsonUrlTemplate = "{% url 'geojson' '__TABLE__' %}";
+	    const importUrl = "{% url 'import_geojson' %}";
+	    const topoCheckUrl = "{% url 'topology_check' %}";
+	    const topoRepairUrl = "{% url 'topology_repair' %}";
+	    const tableFieldsUrl = "{% url 'table_fields' %}";
+	    const selectAttrUrl = "{% url 'select_attribute' %}";
+	    const selectLocUrl = "{% url 'select_location' %}";
+	    const sqlSelectUrl = "{% url 'sql_select_api' %}";
+	    const exportUrl = "{% url 'export_selected' %}";
+	    const routeUrl = "{% url 'shortest_path' %}";
+	    const trajectoryUrl = "{% url 'trajectory_correct' %}";
+    const tables = JSON.parse(document.getElementById('tables-data').textContent || '[]');
+    const tableSelect = document.getElementById('table');
+    const lonSelect = document.getElementById('lon');
+    const latSelect = document.getElementById('lat');
+    const loadBtn = document.getElementById('loadBtn');
+    const basemapBtn = document.getElementById('basemapBtn');
+    const loadBboxEl = document.getElementById('loadBbox');
+    const loadLimitEl = document.getElementById('loadLimit');
+    const layerListEl = document.getElementById('layerList');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const clearSelectionAllBtn = document.getElementById('clearSelectionAllBtn');
+    const layersPanel = document.getElementById('layersPanel');
+    const toolsPanel = document.getElementById('toolsPanel');
+    const leftResizeHandle = document.getElementById('leftResizeHandle');
+    const rightResizeHandle = document.getElementById('rightResizeHandle');
+    const layersCollapseBtn = document.getElementById('layersCollapseBtn');
+    const toolsCollapseBtn = document.getElementById('toolsCollapseBtn');
+    const layersTab = document.getElementById('layersTab');
+    const toolsTab = document.getElementById('toolsTab');
+    const attrDockTab = document.getElementById('attrDockTab');
+    const attrDockEl = document.getElementById('attrDock');
+    const attrDockHandle = document.getElementById('attrDockHandle');
+    const attrDockWideBtn = document.getElementById('attrDockWideBtn');
+    const attrDockMinBtn = document.getElementById('attrDockMinBtn');
+    const attrDockCloseAllBtn = document.getElementById('attrDockCloseAllBtn');
+    const attrTabsEl = document.getElementById('attrTabs');
+    const attrDockStatusEl = document.getElementById('attrTableStatus');
+    const attrDockTableEl = document.getElementById('attrDockTable');
+    const attrPagerInfoEl = document.getElementById('attrPagerInfo');
+    const attrPrevBtn = document.getElementById('attrPrevBtn');
+    const attrNextBtn = document.getElementById('attrNextBtn');
+    const attrPageSizeEl = document.getElementById('attrPageSize');
+    const layerCtxMenuEl = document.getElementById('layerCtxMenu');
+
+    const importTableEl = document.getElementById('importTable');
+    const importFileEl = document.getElementById('importFile');
+    const importFileBtn = document.getElementById('importFileBtn');
+    const importFileNameEl = document.getElementById('importFileName');
+    const importBtn = document.getElementById('importBtn');
+    const importStatus = document.getElementById('importStatus');
+
+    const topoTableEl = document.getElementById('topoTable');
+    const topoOutNameEl = document.getElementById('topoOutName');
+    const topoPersistEl = document.getElementById('topoPersist');
+    const topoCheckBtn = document.getElementById('topoCheckBtn');
+    const topoRepairBtn = document.getElementById('topoRepairBtn');
+    const topoClearBtn = document.getElementById('topoClearBtn');
+    const topoStatus = document.getElementById('topoStatus');
+
+    // --- 导出工具控件 ---
+    const exportTableEl = document.getElementById('exportTable');
+    const exportToTableEl = document.getElementById('exportToTable');
+    const exportToGeojsonEl = document.getElementById('exportToGeojson');
+    const exportOutTableEl = document.getElementById('exportOutTable');
+    const exportBtn = document.getElementById('exportBtn');
+    const exportStatus = document.getElementById('exportStatus');
+
+    // --- 最短路径控件 ---
+    const routeTableEl = document.getElementById('routeTable');
+    const routeStartEl = document.getElementById('routeStart');
+    const routeEndEl = document.getElementById('routeEnd');
+    const routePickStartBtn = document.getElementById('routePickStartBtn');
+    const routePickEndBtn = document.getElementById('routePickEndBtn');
+    const routeClearBtn = document.getElementById('routeClearBtn');
+    const routeAlgoEl = document.getElementById('routeAlgo');
+    const routeOutNameEl = document.getElementById('routeOutName');
+    const routeRunBtn = document.getElementById('routeRunBtn');
+    const routeStatus = document.getElementById('routeStatus');
+
+    // --- 轨迹校正控件 ---
+    const trajTableEl = document.getElementById('trajTable');
+    const trajTimeFieldEl = document.getElementById('trajTimeField');
+    const trajTimeFieldOptionsEl = document.getElementById('trajTimeFieldOptions');
+    const trajRoadTableEl = document.getElementById('trajRoadTable');
+    const trajUseBboxEl = document.getElementById('trajUseBbox');
+    const trajMaxPointsEl = document.getElementById('trajMaxPoints');
+    const trajOutNameEl = document.getElementById('trajOutName');
+    const trajRunBtn = document.getElementById('trajRunBtn');
+    const trajStatus = document.getElementById('trajStatus');
+
+	    // --- 选择工具控件 ---
+	    const attrTableEl = document.getElementById('attrTable');
+	    const attrConditionsEl = document.getElementById('attrConditions');
+	    const attrAddCondBtn = document.getElementById('attrAddCondBtn');
+	    const attrSelectBtn = document.getElementById('attrSelectBtn');
+	    const attrClearBtn = document.getElementById('attrClearBtn');
+	    const attrStatus = document.getElementById('attrStatus');
+
+    const locTargetEl = document.getElementById('locTarget');
+    const locRefEl = document.getElementById('locRef');
+    const locModeEl = document.getElementById('locMode');
+    const locXEl = document.getElementById('locX');
+    const locYEl = document.getElementById('locY');
+    const locRadiusEl = document.getElementById('locRadius');
+    const pickPointBtn = document.getElementById('pickPointBtn');
+    const locSelectBtn = document.getElementById('locSelectBtn');
+    const locClearBtn = document.getElementById('locClearBtn');
+    const locStatus = document.getElementById('locStatus');
+
+    // --- SQL 查询控件 ---
+    const sqlTableEl = document.getElementById('sqlTable');
+    const sqlTextEl = document.getElementById('sqlText');
+    const sqlLinkSelectionEl = document.getElementById('sqlLinkSelection');
+    const sqlMaxRowsEl = document.getElementById('sqlMaxRows');
+    const sqlRunBtn = document.getElementById('sqlRunBtn');
+    const sqlClearBtn = document.getElementById('sqlClearBtn');
+    const sqlStatus = document.getElementById('sqlStatus');
+    const sqlResultEl = document.getElementById('sqlResult');
+
+    // 选择状态：table -> { ids:Set<string>, bboxes:Map<string,[minx,miny,maxx,maxy]> }
+    const selectionState = new Map();
+    // 表字段缓存（用于“按属性选择”字段下拉，避免视野抽样导致字段缺失）
+    const tableFieldsCache = new Map(); // table -> string[]
+    const tableFieldsLoading = new Set(); // table -> boolean
+
+    // 属性表状态：支持多图层、多标签
+    const attrDockState = {
+      tabs: [], // [{ id, table }]
+      activeId: null,
+      pageSize: 50,
+      pageById: new Map(), // id -> pageIndex(0-based)
+    };
+
+    const attrDockUi = {
+      mode: 'map', // 'map' | 'full'
+    };
+
+    function getSelection(table) {
+      if (!selectionState.has(table)) {
+        selectionState.set(table, { ids: new Set(), bboxes: new Map() });
+      }
+      return selectionState.get(table);
+    }
+
+    function applySelectionStyles(item) {
+      if (!item || !item.dataLayer) return;
+      const sel = getSelection(item.table);
+      const ids = sel.ids;
+
+      const forEachLeafLayer = (layer, fn) => {
+        if (!layer) return;
+        // MultiPoint 等会生成 FeatureGroup/LayerGroup：递归走到真正的 Path/Marker
+        if (layer.eachLayer && !layer.setStyle && !(layer.setRadius && layer.getRadius)) {
+          try { layer.eachLayer((child) => forEachLeafLayer(child, fn)); } catch (e) {}
+          return;
+        }
+        fn(layer);
+      };
+
+      item.dataLayer.eachLayer((root) => {
+        forEachLeafLayer(root, (l) => {
+          const f = l && l.feature ? l.feature : null;
+          const key = _featureKey(f);
+          const selected = (key !== null) && ids.has(key);
+
+          // 缓存“基础样式/半径”（避免 click-highlight 把黄色当成原始样式）
+          if (!l.__origSaved) {
+            l.__origSaved = true;
+            const base = l.__baseStyle || null;
+            l.__origStyle = base || (l.options ? {
+              color: l.options.color,
+              weight: l.options.weight,
+              opacity: l.options.opacity,
+              fillColor: l.options.fillColor,
+              fillOpacity: l.options.fillOpacity,
+            } : null);
+            l.__origRadius = (typeof l.__baseRadius === 'number') ? l.__baseRadius : (l.getRadius ? l.getRadius() : undefined);
+          }
+
+          try {
+            if (l.setStyle) {
+              if (selected) {
+                const baseW = (l.options && l.options.weight) ? l.options.weight : 3;
+                l.setStyle({
+                  color: '#f1c40f',
+                  weight: Math.max(5, baseW + 2),
+                  opacity: 1,
+                  fillColor: '#f1c40f',
+                  fillOpacity: 0.9,
+                });
+              } else if (l.__origStyle) {
+                l.setStyle(l.__origStyle);
+              }
+            }
+            if (l.setRadius && l.getRadius) {
+              if (selected) {
+                const baseR = (typeof l.__origRadius === 'number') ? l.__origRadius : l.getRadius();
+                l.setRadius(Math.max(9, baseR + 2));
+              } else if (typeof l.__origRadius === 'number') {
+                l.setRadius(l.__origRadius);
+              }
+            }
+          } catch (e) { /* ignore */ }
+        });
+      });
+    }
+
+    function rememberBaseStyle(layer) {
+      const walk = (l) => {
+        if (!l) return;
+        if (l.eachLayer && !l.setStyle && !(l.setRadius && l.getRadius)) {
+          try { l.eachLayer((c) => walk(c)); } catch (e) {}
+          return;
+        }
+        if (!l.__baseSaved) {
+          l.__baseSaved = true;
+          l.__baseStyle = (l.options ? {
+            color: l.options.color,
+            weight: l.options.weight,
+            opacity: l.options.opacity,
+            fillColor: l.options.fillColor,
+            fillOpacity: l.options.fillOpacity,
+          } : null);
+          l.__baseRadius = (l.getRadius ? l.getRadius() : undefined);
+        }
+      };
+      walk(layer);
+    }
+
+    function setSelectionForTable(table, ids, bboxesObj) {
+      const sel = getSelection(table);
+      sel.ids = new Set((ids || []).map((x) => (x === undefined || x === null) ? '' : String(x)).filter((s) => s.length > 0));
+      sel.bboxes = new Map();
+      if (bboxesObj && typeof bboxesObj === 'object') {
+        for (const [k, v] of Object.entries(bboxesObj)) {
+          const id = (k === undefined || k === null) ? '' : String(k);
+          if (!id || !Array.isArray(v) || v.length < 4) continue;
+          sel.bboxes.set(id, [Number(v[0]), Number(v[1]), Number(v[2]), Number(v[3])]);
+        }
+      }
+      const item = findLayerItemByTable(table);
+      if (item) applySelectionStyles(item);
+    }
+
+    function clearSelectionForTable(table) {
+      const sel = getSelection(table);
+      sel.ids = new Set();
+      sel.bboxes = new Map();
+      const item = findLayerItemByTable(table);
+      if (item) applySelectionStyles(item);
+    }
+
+    function removeLayerByTable(table) {
+      const item = findLayerItemByTable(table);
+      if (!item) return;
+      try {
+        if (map && item.layer && map.hasLayer(item.layer)) {
+          map.removeLayer(item.layer);
+        }
+      } catch (e) { /* ignore */ }
+      try { selectionState.delete(item.table); } catch (e) { /* ignore */ }
+      try {
+        const idx = layersState.findIndex(x => x.table === item.table);
+        if (idx >= 0) layersState.splice(idx, 1);
+      } catch (e) { /* ignore */ }
+      renderLayerList();
+    }
+
+    function zoomToLayer(table) {
+      if (!map) return;
+      const item = findLayerItemByTable(table);
+      if (!item) return;
+      try {
+        // 如果该图层当前被隐藏，先显示它（否则 fitBounds 也可能不直观）
+        if (item.layer && !map.hasLayer(item.layer)) {
+          item.visible = true;
+          item.layer.addTo(map);
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        const l = item.dataLayer || item.layer;
+        if (!l || !l.getBounds) return;
+        const b = l.getBounds();
+        if (b && b.isValid && b.isValid()) {
+          map.fitBounds(b, { padding: [20, 20] });
+        }
+      } catch (e) { /* ignore */ }
+      try { renderLayerList(); } catch (e) { /* ignore */ }
+    }
+
+    function selectAllForTable(table) {
+      const item = findLayerItemByTable(table);
+      if (!item || !item.dataLayer) return;
+      const sel = getSelection(table);
+      sel.ids = new Set();
+      sel.bboxes = new Map();
+
+      const addFeature = (feature) => {
+        const key = _featureKey(feature);
+        if (!key) return;
+        sel.ids.add(String(key));
+        const bb = _computeFeatureBbox(feature);
+        if (bb) sel.bboxes.set(String(key), bb);
+      };
+
+      const forEachLeafLayer = (layer, fn) => {
+        if (!layer) return;
+        if (layer.eachLayer && !layer.setStyle && !(layer.setRadius && layer.getRadius)) {
+          try { layer.eachLayer((child) => forEachLeafLayer(child, fn)); } catch (e) {}
+          return;
+        }
+        fn(layer);
+      };
+
+      try {
+        item.dataLayer.eachLayer((root) => {
+          forEachLeafLayer(root, (l) => {
+            const f = l && l.feature ? l.feature : null;
+            if (f) addFeature(f);
+          });
+        });
+      } catch (e) { /* ignore */ }
+
+      applySelectionStyles(item);
+    }
+
+    function _featureKey(feature) {
+      try {
+        const p = (feature && feature.properties) ? feature.properties : null;
+        const candidates = [];
+        if (p) {
+          if (p.__client_id) candidates.push(p.__client_id);
+          candidates.push(p.id, p.ID, p.fid, p.FID, p.objectid, p.OBJECTID);
+        }
+        candidates.push(feature ? feature.id : undefined);
+        for (const c of candidates) {
+          if (c === undefined || c === null) continue;
+          if (typeof c === 'object') continue;
+          const s = String(c);
+          if (s.length > 0) return s;
+        }
+        // 没有稳定 id 的要素（例如临时修复新线段）：分配一个 client id，保证可选/可导出
+        if (p && typeof p === 'object') {
+          if (!window.__spatialClientIdCounter) window.__spatialClientIdCounter = 1;
+          const id = `c${window.__spatialClientIdCounter++}`;
+          p.__client_id = id;
+          return id;
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function _iterXY(coords, out) {
+      if (!coords) return;
+      if (Array.isArray(coords)) {
+        if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+          out.push([coords[0], coords[1]]);
+        } else {
+          for (const item of coords) _iterXY(item, out);
+        }
+      }
+    }
+
+    function _computeFeatureBbox(feature) {
+      const g = feature && feature.geometry ? feature.geometry : null;
+      if (!g) return null;
+      const pts = [];
+      _iterXY(g.coordinates, pts);
+      if (!pts.length) return null;
+      let minx = pts[0][0], miny = pts[0][1], maxx = pts[0][0], maxy = pts[0][1];
+      for (const p of pts) {
+        const x = p[0], y = p[1];
+        if (x < minx) minx = x;
+        if (y < miny) miny = y;
+        if (x > maxx) maxx = x;
+        if (y > maxy) maxy = y;
+      }
+      return [minx, miny, maxx, maxy];
+    }
+
+    function toggleFeatureSelection(table, feature) {
+      const key = _featureKey(feature);
+      if (key === null) return;
+      const sel = getSelection(table);
+      if (sel.ids.has(key)) {
+        sel.ids.delete(key);
+        sel.bboxes.delete(key);
+      } else {
+        sel.ids.add(key);
+        const bb = _computeFeatureBbox(feature);
+        if (bb) sel.bboxes.set(key, bb);
+      }
+      const item = findLayerItemByTable(table);
+      if (item) applySelectionStyles(item);
+
+      // 体验优化：如果该图层正作为“按位置选择”的参照图层，且 x/y 还未填写，
+      // 则用“已选择要素”的 bbox 中心自动填充。
+      try {
+        if (locRefEl && locRefEl.value && locRefEl.value === table) {
+          syncLocPointInputsFromRefSelection(table);
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function syncLocPointInputsFromRefSelection(refTable) {
+      if (!refTable) return;
+      if (!locXEl || !locYEl) return;
+
+      const xHas = (locXEl.value || '').trim().length > 0;
+      const yHas = (locYEl.value || '').trim().length > 0;
+      if (xHas || yHas) return;
+
+      const sel = getSelection(refTable);
+      if (!sel || !sel.bboxes || sel.bboxes.size === 0) return;
+
+      // 合并 bbox（多要素）并取中心点
+      let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+      for (const bb of sel.bboxes.values()) {
+        if (!Array.isArray(bb) || bb.length < 4) continue;
+        if (bb[0] < minx) minx = bb[0];
+        if (bb[1] < miny) miny = bb[1];
+        if (bb[2] > maxx) maxx = bb[2];
+        if (bb[3] > maxy) maxy = bb[3];
+      }
+      if (!Number.isFinite(minx) || !Number.isFinite(miny) || !Number.isFinite(maxx) || !Number.isFinite(maxy)) return;
+
+      const cx = (minx + maxx) / 2;
+      const cy = (miny + maxy) / 2;
+      locXEl.value = String(cx.toFixed(6));
+      locYEl.value = String(cy.toFixed(6));
+
+      // 如果半径已填写，并且当前模式需要点，则同步画点/圆
+      const mode = (locModeEl && locModeEl.value) ? String(locModeEl.value) : '';
+      if (mode === 'point' || mode === 'circle_from_selected') {
+        const radius_m = Number((locRadiusEl && locRadiusEl.value ? locRadiusEl.value : '').trim());
+        if (Number.isFinite(radius_m) && radius_m > 0) {
+          showLocPoint(cx, cy, radius_m);
+        }
+      }
+
+      try {
+        if (locStatus && !locStatus.textContent) {
+          locStatus.textContent = `已从参照图层选择自动填充中心点：(${locXEl.value}, ${locYEl.value})`;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function updateSelectToolOptions() {
+      const names = layersState.map(it => it.table);
+      const persisted = new Set((tables || []).map(t => t && t.name).filter(Boolean));
+      const attrNames = Array.from(new Set((tables || []).map(t => t && t.name).filter(Boolean))).sort();
+      const routeNames = layersState.filter(it => it && it.hasLines && persisted.has(it.table)).map(it => it.table);
+      const trajPointNames = layersState.filter(it => it && it.hasPoints && persisted.has(it.table)).map(it => it.table);
+      const prevA = attrTableEl.value;
+      const prevT = locTargetEl.value;
+      const prevR = locRefEl.value;
+      const prevE = exportTableEl ? exportTableEl.value : '';
+      const prevRoute = routeTableEl ? routeTableEl.value : '';
+      const prevTraj = trajTableEl ? trajTableEl.value : '';
+      const prevTrajRoad = trajRoadTableEl ? trajRoadTableEl.value : '';
+
+      const fill = (el, prev, placeholder) => {
+        el.innerHTML = '';
+        if (!names.length) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = placeholder;
+          el.appendChild(opt);
+          return;
+        }
+        for (const n of names) {
+          const opt = document.createElement('option');
+          opt.value = n;
+          opt.textContent = n;
+          el.appendChild(opt);
+        }
+        if (names.includes(prev)) el.value = prev;
+      };
+
+      const fillList = (el, list, prev, placeholder) => {
+        if (!el) return;
+        el.innerHTML = '';
+        if (!list || !list.length) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = placeholder;
+          el.appendChild(opt);
+          return;
+        }
+        for (const n of list) {
+          const opt = document.createElement('option');
+          opt.value = n;
+          opt.textContent = n;
+          el.appendChild(opt);
+        }
+        if (list.includes(prev)) el.value = prev;
+      };
+
+      fillList(attrTableEl, attrNames, prevA, '（请选择表）');
+      fill(locTargetEl, prevT, '（请先加载图层）');
+      fill(locRefEl, prevR, '（请先加载图层）');
+      if (exportTableEl) fill(exportTableEl, prevE, '（请先加载图层）');
+      if (routeTableEl) {
+        routeTableEl.innerHTML = '';
+        if (!routeNames.length) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '（请先加载并选择已持久化线图层）';
+          routeTableEl.appendChild(opt);
+        } else {
+          for (const n of routeNames) {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            routeTableEl.appendChild(opt);
+          }
+          if (routeNames.includes(prevRoute)) routeTableEl.value = prevRoute;
+        }
+      }
+
+      fillList(trajTableEl, trajPointNames, prevTraj, '（请先加载并选择点图层）');
+      fillList(trajRoadTableEl, routeNames, prevTrajRoad, '（请先加载并选择已持久化线图层）');
+
+      // 同步“按属性选择”的字段下拉建议
+      try { populateAttrFieldOptions(attrTableEl.value); } catch (e) { /* ignore */ }
+      try { populateTrajectoryTimeFieldOptions(trajTableEl ? trajTableEl.value : ''); } catch (e) { /* ignore */ }
+    }
+
+    function _uniqPush(list, seenLower, value) {
+      const v = (value || '').trim();
+      if (!v) return;
+      const key = v.toLowerCase();
+      if (seenLower.has(key)) return;
+      seenLower.add(key);
+      list.push(v);
+    }
+
+	    function _setSelectOptions(selectEl, list, prevValue, placeholder) {
+	      if (!selectEl) return;
+	      const prev = (prevValue || '').trim();
+	      selectEl.innerHTML = '';
+	      if (placeholder) {
+	        const opt = document.createElement('option');
+	        opt.value = '';
+	        opt.textContent = placeholder;
+	        selectEl.appendChild(opt);
+	      }
+	      for (const v of (list || [])) {
+	        const opt = document.createElement('option');
+	        opt.value = v;
+	        opt.textContent = v;
+	        selectEl.appendChild(opt);
+	      }
+	      if (prev && Array.isArray(list) && list.includes(prev)) {
+	        selectEl.value = prev;
+	      }
+	    }
+
+	    function _attrOpOptions() {
+	      return [
+	        { value: '=', label: '完全等于 (=)' },
+	        { value: '!=', label: '不等于 (!=)' },
+	        { value: '>', label: '大于 (>)' },
+	        { value: '<', label: '小于 (<)' },
+	        { value: '>=', label: '大于等于 (>=)' },
+	        { value: '<=', label: '小于等于 (<=)' },
+	        { value: 'contains', label: '包含（字符串）' },
+	        { value: 'not_contains', label: '不包含（字符串）' },
+	        { value: 'wildcard', label: '通配符（* / % / ? / _）' },
+	      ];
+	    }
+
+	    function _setAttrRowJoinsVisibility() {
+	      const rows = attrConditionsEl ? Array.from(attrConditionsEl.querySelectorAll('.attr-cond-row')) : [];
+	      const showRemove = rows.length > 1;
+	      rows.forEach((row, idx) => {
+	        const joinEl = row.querySelector('select.attr-cond-join');
+	        const rm = row.querySelector('button.attr-cond-remove');
+	        if (joinEl) {
+	          if (idx === 0) {
+	            joinEl.disabled = true;
+	            joinEl.style.visibility = 'hidden';
+	          } else {
+	            joinEl.disabled = false;
+	            joinEl.style.visibility = 'visible';
+	          }
+	        }
+	        if (rm) {
+	          rm.disabled = !showRemove;
+	          rm.style.visibility = showRemove ? 'visible' : 'hidden';
+	        }
+	      });
+	    }
+
+	    function _ensureAttrAtLeastOneRow() {
+	      if (!attrConditionsEl) return;
+	      if (attrConditionsEl.querySelector('.attr-cond-row')) return;
+	      _addAttrConditionRow();
+	    }
+
+	    function _addAttrConditionRow(preset) {
+	      if (!attrConditionsEl) return;
+
+	      const row = document.createElement('div');
+	      row.className = 'attr-cond-row';
+
+	      const joinEl = document.createElement('select');
+	      joinEl.className = 'attr-cond-join';
+	      joinEl.innerHTML = `
+	        <option value="AND">AND</option>
+	        <option value="OR">OR</option>
+	      `;
+
+	      const fieldEl = document.createElement('select');
+	      fieldEl.className = 'attr-cond-field';
+
+	      const opEl = document.createElement('select');
+	      opEl.className = 'attr-cond-op';
+	      for (const it of _attrOpOptions()) {
+	        const opt = document.createElement('option');
+	        opt.value = it.value;
+	        opt.textContent = it.label;
+	        opEl.appendChild(opt);
+	      }
+
+	      const valueEl = document.createElement('input');
+	      valueEl.className = 'attr-cond-value';
+	      valueEl.type = 'text';
+	      valueEl.placeholder = '输入比较值（字符串可用 * / % / ? / _）';
+
+	      const rm = document.createElement('button');
+	      rm.type = 'button';
+	      rm.className = 'secondary attr-cond-remove';
+	      rm.textContent = '✕';
+	      rm.title = '移除该约束';
+	      rm.addEventListener('click', () => {
+	        try { row.remove(); } catch (e) { /* ignore */ }
+	        _ensureAttrAtLeastOneRow();
+	        _setAttrRowJoinsVisibility();
+	      });
+
+	      row.appendChild(joinEl);
+	      row.appendChild(fieldEl);
+	      row.appendChild(opEl);
+	      row.appendChild(valueEl);
+	      row.appendChild(rm);
+	      attrConditionsEl.appendChild(row);
+
+	      try {
+	        if (preset && preset.join && String(preset.join).toUpperCase() === 'OR') joinEl.value = 'OR';
+	        if (preset && preset.op) opEl.value = String(preset.op);
+	        if (preset && preset.value !== undefined && preset.value !== null) valueEl.value = String(preset.value);
+	      } catch (e) { /* ignore */ }
+
+	      _setAttrRowJoinsVisibility();
+	      try { populateAttrFieldOptions(attrTableEl ? attrTableEl.value : ''); } catch (e) { /* ignore */ }
+	    }
+
+	    function _applyAttrFieldOptionsToRows(tableName, options) {
+	      if (!attrConditionsEl) return;
+	      const rows = Array.from(attrConditionsEl.querySelectorAll('.attr-cond-row'));
+	      for (const row of rows) {
+	        const fieldEl = row.querySelector('select.attr-cond-field');
+	        if (!fieldEl) continue;
+	        const prev = (fieldEl.value || '').trim();
+	        _setSelectOptions(fieldEl, options, prev, '（选择字段）');
+	      }
+	      try {
+	        const first = rows[0] ? rows[0].querySelector('select.attr-cond-field') : null;
+	        const cur = first ? String(first.value || '').trim() : '';
+	        if (first && !cur && Array.isArray(options) && options.length) {
+	          const preferred = options.find((x) => String(x).toLowerCase() === 'id') || options[0];
+	          if (preferred) first.value = preferred;
+	        }
+	      } catch (e) { /* ignore */ }
+	    }
+
+	    function populateAttrFieldOptions(tableName) {
+	      _ensureAttrAtLeastOneRow();
+	      if (!tableName) {
+	        _applyAttrFieldOptionsToRows('', []);
+	        return;
+	      }
+
+	      const options = [];
+	      const seenLower = new Set();
+
+	      // 1) 顶层列名（来自后端 tables 列表）
+	      try {
+	        const t = tables.find(x => x && x.name === tableName);
+	        const cols = (t && Array.isArray(t.columns)) ? t.columns : [];
+	        for (const c of cols) _uniqPush(options, seenLower, String(c));
+	      } catch (e) { /* ignore */ }
+
+	      // 2) properties 子字段（优先使用后端返回的完整字段列表；失败则回退到前端抽样）
+	      try {
+	        const item = findLayerItemByTable(tableName);
+	        const cached = (item && Array.isArray(item.propFieldOptions)) ? item.propFieldOptions : [];
+	        if (cached && cached.length) {
+	          for (const v of cached) _uniqPush(options, seenLower, String(v));
+	        } else if (tableFieldsCache.has(tableName)) {
+	          for (const v of (tableFieldsCache.get(tableName) || [])) _uniqPush(options, seenLower, String(v));
+	        } else if (item && Array.isArray(item.featureList) && item.featureList.length) {
+	          const fromFeats = _extractPropFieldOptionsFromFeatures({ type: 'FeatureCollection', features: item.featureList }, 300);
+	          for (const v of fromFeats) _uniqPush(options, seenLower, String(v));
+	        }
+	      } catch (e) { /* ignore */ }
+
+	      _applyAttrFieldOptionsToRows(tableName, options);
+
+	      // 3) 异步拉取“完整字段列表”（避免视野加载/抽样导致字段缺失）
+	      try {
+	        const item = findLayerItemByTable(tableName);
+	        if (tableFieldsUrl && !tableFieldsCache.has(tableName) && !tableFieldsLoading.has(tableName)) {
+	          tableFieldsLoading.add(tableName);
+	          const seq = (populateAttrFieldOptions._seq = (populateAttrFieldOptions._seq || 0) + 1);
+	          fetch(tableFieldsUrl, {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ table: tableName }),
+	          }).then(r => r.json()).then((data) => {
+	            if (!data || !data.ok) return;
+	            if (seq !== populateAttrFieldOptions._seq) return;
+	            if (attrTableEl && attrTableEl.value !== tableName) return;
+
+	            const all = Array.isArray(data.options) ? data.options : [];
+	            const propsOnly = all.filter((x) => String(x).startsWith('properties.'));
+	            tableFieldsCache.set(tableName, all);
+	            if (item) {
+	              item.propFieldOptions = propsOnly;
+	              item._allFieldOptionsLoaded = true;
+	            }
+
+	            const merged = [];
+	            const mergedSeen = new Set();
+	            for (const v of all) _uniqPush(merged, mergedSeen, String(v));
+	            _applyAttrFieldOptionsToRows(tableName, merged);
+	          }).catch(() => {}).finally(() => {
+	            try { tableFieldsLoading.delete(tableName); } catch (e) {}
+	          });
+	        }
+	      } catch (e) { /* ignore */ }
+	    }
+	    populateAttrFieldOptions._seq = 0;
+
+	    function populateTrajectoryTimeFieldOptions(tableName) {
+	      if (!trajTimeFieldOptionsEl) return;
+	      trajTimeFieldOptionsEl.innerHTML = '';
+	      if (!tableName) return;
+
+	      const options = [];
+	      const seenLower = new Set();
+
+	      try {
+	        const item = findLayerItemByTable(tableName);
+	        const cached = (item && Array.isArray(item.propFieldOptions)) ? item.propFieldOptions : [];
+	        if (cached && cached.length) {
+	          for (const v of cached) _uniqPush(options, seenLower, String(v));
+	        } else if (item && Array.isArray(item.featureList) && item.featureList.length) {
+	          const fromFeats = _extractPropFieldOptionsFromFeatures({ type: 'FeatureCollection', features: item.featureList }, 400);
+	          for (const v of fromFeats) _uniqPush(options, seenLower, String(v));
+	        } else if (item && !item._allFieldOptionsLoaded && tableFieldsUrl) {
+	          // 异步补全（复用后端字段列表）
+	          const seq = (populateTrajectoryTimeFieldOptions._seq = (populateTrajectoryTimeFieldOptions._seq || 0) + 1);
+	          fetch(tableFieldsUrl, {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ table: tableName }),
+	          }).then(r => r.json()).then((data) => {
+	            if (!data || !data.ok) return;
+	            if (seq !== populateTrajectoryTimeFieldOptions._seq) return;
+	            if (trajTableEl && trajTableEl.value !== tableName) return;
+	            const all = Array.isArray(data.options) ? data.options : [];
+	            const propsOnly = all.filter((x) => String(x).startsWith('properties.'));
+	            item.propFieldOptions = propsOnly;
+	            item._allFieldOptionsLoaded = true;
+	            populateTrajectoryTimeFieldOptions(tableName);
+	          }).catch(() => {});
+	        }
+	      } catch (e) { /* ignore */ }
+
+      for (const v of options) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        trajTimeFieldOptionsEl.appendChild(opt);
+      }
+
+      try {
+        const cur = (trajTimeFieldEl && trajTimeFieldEl.value) ? String(trajTimeFieldEl.value).trim() : '';
+        if (!cur && options.length) {
+          const preferred =
+            options.find((x) => String(x).toLowerCase() === 'properties.定位时间') ||
+            options.find((x) => String(x).toLowerCase() === 'properties.time') ||
+            options.find((x) => String(x).toLowerCase() === 'properties.timestamp') ||
+            options[0];
+          if (preferred) trajTimeFieldEl.value = preferred;
+        }
+	      } catch (e) { /* ignore */ }
+	    }
+	    populateTrajectoryTimeFieldOptions._seq = 0;
+
+    // 参照图层变化：如果它已有选择，尝试自动填充中心点到 x/y
+    try {
+      locRefEl.addEventListener('change', () => {
+        const ref = locRefEl.value;
+        if (ref) syncLocPointInputsFromRefSelection(ref);
+      });
+      locModeEl.addEventListener('change', () => {
+        const ref = locRefEl.value;
+        if (ref) syncLocPointInputsFromRefSelection(ref);
+      });
+    } catch (e) { /* ignore */ }
+
+    // 两阶段：必须先“检查拓扑”拿到 check_token 才允许“修复拓扑”
+    let topoCheckToken = null;
+    let topoCheckTokenTable = null;
+
+    // 不使用 disabled（disabled 会吞掉 click 事件，无法弹窗提示）。
+    // 实际两阶段约束仍由 check_token + 后端校验强制。
+    function setTopoRepairEnabled(enabled) {
+      topoRepairBtn.dataset.enabled = enabled ? '1' : '0';
+      topoRepairBtn.classList.toggle('secondary', !enabled);
+      topoRepairBtn.title = enabled ? '' : '请先点击“检查拓扑”，再执行修复';
+      topoRepairBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    }
+
+    setTopoRepairEnabled(false);
+
+    function populateTables() {
+      tables.forEach((t, idx) => {
+        const opt = document.createElement('option');
+        opt.value = t.name;
+        opt.textContent = t.name;
+        tableSelect.appendChild(opt);
+        if (idx === 0) {
+          populateColumns(t.columns);
+        }
+      });
+    }
+
+    function populateColumns(cols) {
+      lonSelect.innerHTML = '';
+      latSelect.innerHTML = '';
+
+      // 默认使用原始 geometry（保留 Point/LineString/Polygon 等要素类型）
+      const emptyLon = document.createElement('option');
+      emptyLon.value = '';
+      emptyLon.textContent = '（使用 geometry）';
+      lonSelect.appendChild(emptyLon);
+      const emptyLat = document.createElement('option');
+      emptyLat.value = '';
+      emptyLat.textContent = '（使用 geometry）';
+      latSelect.appendChild(emptyLat);
+
+      cols.forEach(c => {
+        const opt1 = document.createElement('option');
+        opt1.value = c; opt1.textContent = c; lonSelect.appendChild(opt1);
+        const opt2 = document.createElement('option');
+        opt2.value = c; opt2.textContent = c; latSelect.appendChild(opt2);
+      });
+    }
+
+    tableSelect.addEventListener('change', () => {
+      const selected = tables.find(t => t.name === tableSelect.value);
+      if (selected) populateColumns(selected.columns);
+    });
+
+    populateTables();
+
+    // --- SQL 查询工具（仅 SELECT） ---
+    function refreshSqlToolTables() {
+      if (!sqlTableEl) return;
+      const prev = String(sqlTableEl.value || '');
+      sqlTableEl.innerHTML = '';
+      const names = (tables || []).map(t => t && t.name).filter(Boolean);
+      if (!names.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '（暂无可用表）';
+        sqlTableEl.appendChild(opt);
+        return;
+      }
+      for (const name of names) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sqlTableEl.appendChild(opt);
+      }
+      if (prev && names.includes(prev)) {
+        sqlTableEl.value = prev;
+      }
+    }
+
+    function _sqlDefaultTextForTable(t) {
+      const tableName = String(t || '').trim();
+      if (!tableName) return '';
+      return `SELECT * FROM ${tableName} LIMIT 50;`;
+    }
+
+    function _sqlRenderValue(v) {
+      if (v === null || typeof v === 'undefined') return '';
+      if (typeof v === 'object') {
+        try { return JSON.stringify(v); } catch (e) { return String(v); }
+      }
+      return String(v);
+    }
+
+    function renderSqlResult(columns, rows) {
+      if (!sqlResultEl) return;
+      const cols = Array.isArray(columns) ? columns : [];
+      const rs = Array.isArray(rows) ? rows : [];
+      if (!cols.length || !rs.length) {
+        sqlResultEl.innerHTML = '';
+        sqlResultEl.style.display = 'none';
+        return;
+      }
+
+      const head = cols.map(c => `<th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap;">${_escapeHtml(c)}</th>`).join('');
+      const body = rs.map(r => {
+        const tds = cols.map(c => {
+          const val = (r && typeof r === 'object') ? r[c] : '';
+          const text = _escapeHtml(_sqlRenderValue(val));
+          return `<td style="padding:6px 8px; border-bottom:1px solid var(--border); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${text}">${text}</td>`;
+        }).join('');
+        return `<tr>${tds}</tr>`;
+      }).join('');
+
+      sqlResultEl.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+          <thead><tr>${head}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      `;
+      sqlResultEl.style.display = 'block';
+    }
+
+    if (sqlTextEl) {
+      sqlTextEl.addEventListener('input', () => {
+        sqlTextEl.dataset.dirty = '1';
+      });
+    }
+
+    if (sqlTableEl) {
+      sqlTableEl.addEventListener('change', () => {
+        if (!sqlTextEl) return;
+        // 未手动编辑时，自动填入默认 SELECT 模板
+        const dirty = (sqlTextEl.dataset.dirty === '1');
+        if (!dirty) {
+          sqlTextEl.value = _sqlDefaultTextForTable(sqlTableEl.value);
+        }
+      });
+    }
+
+    if (sqlClearBtn) {
+      sqlClearBtn.addEventListener('click', () => {
+        try { if (sqlTextEl) sqlTextEl.value = ''; } catch (e) {}
+        try { if (sqlTextEl) delete sqlTextEl.dataset.dirty; } catch (e) {}
+        try { if (sqlStatus) sqlStatus.textContent = ''; } catch (e) {}
+        try { if (sqlResultEl) { sqlResultEl.innerHTML = ''; sqlResultEl.style.display = 'none'; } } catch (e) {}
+      });
+    }
+
+    if (sqlRunBtn) {
+      sqlRunBtn.addEventListener('click', async () => {
+        if (sqlStatus) sqlStatus.textContent = '';
+        const sql = (sqlTextEl ? String(sqlTextEl.value || '').trim() : '');
+        if (!sql) {
+          alert('请输入 SQL（仅支持 SELECT）');
+          return;
+        }
+        let maxRows = 50;
+        try {
+          const raw = sqlMaxRowsEl ? String(sqlMaxRowsEl.value || '').trim() : '';
+          if (raw) {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && n > 0) maxRows = Math.min(500, n);
+          }
+        } catch (e) { /* ignore */ }
+
+        try {
+          const res = await fetch(sqlSelectUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql, max_rows: maxRows }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data || !data.ok) {
+            throw new Error((data && data.error) ? data.error : `查询失败：${res.status}`);
+          }
+
+          renderSqlResult(data.columns || [], data.rows || []);
+
+          const msgParts = [];
+          msgParts.push(`返回 ${data.row_count || 0} 行（表：${data.table || ''}）`);
+          if (data.max_rows) msgParts.push(`cap=${data.max_rows}`);
+
+          const link = !!(sqlLinkSelectionEl && sqlLinkSelectionEl.checked);
+          if (link && data.table && Array.isArray(data.ids)) {
+            const tableName = String(data.table);
+            const item = findLayerItemByTable(tableName);
+            if (!item) {
+              msgParts.push('未加载该表图层，未联动选择');
+            } else {
+              setSelectionForTable(tableName, data.ids, data.bboxes || {});
+              msgParts.push(`已联动选择 ${data.selected_count || data.ids.length || 0} 个要素`);
+            }
+          }
+
+          if (sqlStatus) sqlStatus.textContent = msgParts.join('；');
+        } catch (e) {
+          console.error(e);
+          alert(e.message || String(e));
+        }
+      });
+    }
+
+    // 初始化下拉 + 默认 SQL 模板
+    refreshSqlToolTables();
+    try {
+      if (sqlTextEl && sqlTableEl && !(sqlTextEl.value || '').trim()) {
+        sqlTextEl.value = _sqlDefaultTextForTable(sqlTableEl.value);
+      }
+    } catch (e) { /* ignore */ }
+
+    if (typeof L === 'undefined') {
+      console.error('Leaflet failed to load. Please check network/CSP.');
+    }
+
+    const map = (typeof L !== 'undefined') ? L.map('map').setView([22.55, 114.05], 11) : null;
+    let osmLightLayer = null;
+    let osmDarkLayer = null;
+    let osmFilterLayer = null;
+    let currentBasemapLayer = null;
+    let basemapEnabled = false; // 默认不加载 OSM
+    let darkBasemapBackend = 'carto'; // 'carto' | 'filter'
+    let darkTileErrors = 0;
+    let darkTileErrorsWindowStart = 0;
+
+    function _currentTheme() {
+      try { return String(document.documentElement.getAttribute('data-theme') || 'light'); } catch (e) { return 'light'; }
+    }
+
+    function _ensureOsmLightLayer() {
+      if (!map || typeof L === 'undefined') return null;
+      if (!osmLightLayer) {
+        osmLightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          crossOrigin: true,
+          attribution: '&copy; OpenStreetMap contributors',
+        });
+      }
+      return osmLightLayer;
+    }
+
+    function _ensureOsmFilterLayer() {
+      if (!map || typeof L === 'undefined') return null;
+      if (!osmFilterLayer) {
+        osmFilterLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          crossOrigin: true,
+          attribution: '&copy; OpenStreetMap contributors',
+          className: 'tile-dark-filter',
+        });
+      }
+      return osmFilterLayer;
+    }
+
+    function _ensureOsmDarkLayer() {
+      if (!map || typeof L === 'undefined') return null;
+      if (!osmDarkLayer) {
+        // Dark basemap rendered from OSM data (CARTO). If blocked, we fall back to filtered OSM tiles.
+        osmDarkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd',
+          crossOrigin: true,
+          attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        });
+        try {
+          osmDarkLayer.on('tileerror', () => {
+            const now = Date.now();
+            if (!darkTileErrorsWindowStart || (now - darkTileErrorsWindowStart) > 5000) {
+              darkTileErrorsWindowStart = now;
+              darkTileErrors = 0;
+            }
+            darkTileErrors += 1;
+            if (darkTileErrors >= 6) {
+              darkBasemapBackend = 'filter';
+              if (basemapEnabled && _currentTheme() === 'dark') {
+                setBasemapEnabled(true);
+              }
+            }
+          });
+        } catch (e) { /* ignore */ }
+      }
+      return osmDarkLayer;
+    }
+
+    function _pickBasemapLayer() {
+      const theme = _currentTheme();
+      if (theme === 'dark') {
+        if (darkBasemapBackend === 'carto') {
+          return _ensureOsmDarkLayer() || _ensureOsmFilterLayer() || _ensureOsmLightLayer();
+        }
+        return _ensureOsmFilterLayer() || _ensureOsmLightLayer();
+      }
+      return _ensureOsmLightLayer();
+    }
+
+    function setBasemapEnabled(enabled) {
+      basemapEnabled = !!enabled;
+      if (!map) return;
+      const next = basemapEnabled ? _pickBasemapLayer() : null;
+      try {
+        const candidates = [osmLightLayer, osmDarkLayer, osmFilterLayer].filter(Boolean);
+        for (const l of candidates) {
+          if (l && map.hasLayer(l) && l !== next) map.removeLayer(l);
+        }
+        if (next && !map.hasLayer(next)) next.addTo(map);
+        currentBasemapLayer = next;
+      } catch (e) { /* ignore */ }
+      try {
+        if (basemapBtn) basemapBtn.textContent = basemapEnabled ? '隐藏底图' : '加载底图';
+      } catch (e) { /* ignore */ }
+    }
+
+    if (basemapBtn) {
+      basemapBtn.addEventListener('click', () => {
+        if (!map || typeof L === 'undefined') {
+          alert('地图组件未加载（Leaflet CDN 可能被拦截）。');
+          return;
+        }
+        setBasemapEnabled(!basemapEnabled);
+      });
+      // 初始：保证文案正确
+      try { basemapBtn.textContent = '加载底图'; } catch (e) {}
+    }
+
+    // Theme change: automatically switch basemap style when dark/light toggles.
+    try {
+      const mo = new MutationObserver(() => {
+        if (!map) return;
+        if (!basemapEnabled) return;
+        setBasemapEnabled(true);
+      });
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    } catch (e) { /* ignore */ }
+
+    function _invalidateMapSoon() {
+      if (!map) return;
+      try { setTimeout(() => { try { map.invalidateSize(); } catch (e) {} }, 50); } catch (e) { /* ignore */ }
+    }
+
+    function _setSidebarWidth(which, px) {
+      const n = Math.max(0, Math.min(900, Number(px)));
+      if (!Number.isFinite(n)) return;
+      if (which === 'left') {
+        document.documentElement.style.setProperty('--left-w', `${n}px`);
+        try { localStorage.setItem('ui.layersWidth', String(n)); } catch (e) {}
+      } else if (which === 'right') {
+        document.documentElement.style.setProperty('--right-w', `${n}px`);
+        try { localStorage.setItem('ui.toolsWidth', String(n)); } catch (e) {}
+      }
+      _invalidateMapSoon();
+      try { _applyAttrDockOffsets(); } catch (e) { /* ignore */ }
+    }
+
+    function _setCollapsed(which, collapsed) {
+      const isCollapsed = !!collapsed;
+      if (which === 'left') {
+        if (isCollapsed) {
+          try { localStorage.setItem('ui.layersCollapsed', '1'); } catch (e) {}
+          try { localStorage.setItem('ui.layersWidthPrev', localStorage.getItem('ui.layersWidth') || '320'); } catch (e) {}
+          layersPanel.classList.add('sidebar-collapsed');
+          leftResizeHandle.classList.add('hidden');
+          layersTab.classList.remove('hidden');
+          _setSidebarWidth('left', 0);
+        } else {
+          try { localStorage.setItem('ui.layersCollapsed', '0'); } catch (e) {}
+          layersPanel.classList.remove('sidebar-collapsed');
+          leftResizeHandle.classList.remove('hidden');
+          layersTab.classList.add('hidden');
+          const prev = Number((localStorage.getItem('ui.layersWidthPrev') || localStorage.getItem('ui.layersWidth') || '320'));
+          _setSidebarWidth('left', Number.isFinite(prev) && prev > 60 ? prev : 320);
+        }
+      } else if (which === 'right') {
+        if (isCollapsed) {
+          try { localStorage.setItem('ui.toolsCollapsed', '1'); } catch (e) {}
+          try { localStorage.setItem('ui.toolsWidthPrev', localStorage.getItem('ui.toolsWidth') || '360'); } catch (e) {}
+          toolsPanel.classList.add('sidebar-collapsed');
+          rightResizeHandle.classList.add('hidden');
+          toolsTab.classList.remove('hidden');
+          _setSidebarWidth('right', 0);
+        } else {
+          try { localStorage.setItem('ui.toolsCollapsed', '0'); } catch (e) {}
+          toolsPanel.classList.remove('sidebar-collapsed');
+          rightResizeHandle.classList.remove('hidden');
+          toolsTab.classList.add('hidden');
+          const prev = Number((localStorage.getItem('ui.toolsWidthPrev') || localStorage.getItem('ui.toolsWidth') || '360'));
+          _setSidebarWidth('right', Number.isFinite(prev) && prev > 60 ? prev : 360);
+        }
+      }
+      _invalidateMapSoon();
+      try { _applyAttrDockOffsets(); } catch (e) { /* ignore */ }
+    }
+
+    function _startResize(handleEl, which) {
+      if (!handleEl) return;
+      handleEl.addEventListener('mousedown', (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        const startX = ev.clientX;
+        const startLeft = layersPanel ? layersPanel.getBoundingClientRect().width : 0;
+        const startRight = toolsPanel ? toolsPanel.getBoundingClientRect().width : 0;
+        const onMove = (e) => {
+          const dx = e.clientX - startX;
+          if (which === 'left') {
+            const w = startLeft + dx;
+            if (w <= 60) _setCollapsed('left', true);
+            else _setSidebarWidth('left', w);
+          } else if (which === 'right') {
+            const w = startRight - dx;
+            if (w <= 60) _setCollapsed('right', true);
+            else _setSidebarWidth('right', w);
+          }
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          document.body.style.cursor = '';
+          _invalidateMapSoon();
+        };
+        document.body.style.cursor = 'col-resize';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
+
+    // 初始化：读取上次宽度/折叠状态
+    try {
+      const lw = Number(localStorage.getItem('ui.layersWidth') || '320');
+      const rw = Number(localStorage.getItem('ui.toolsWidth') || '360');
+      if (Number.isFinite(lw)) _setSidebarWidth('left', lw);
+      if (Number.isFinite(rw)) _setSidebarWidth('right', rw);
+      const lc = (localStorage.getItem('ui.layersCollapsed') || '0') === '1';
+      const rc = (localStorage.getItem('ui.toolsCollapsed') || '0') === '1';
+      if (lc) _setCollapsed('left', true);
+      if (rc) _setCollapsed('right', true);
+
+      const ps = Number(localStorage.getItem('ui.attrPageSize') || '50');
+      if (Number.isFinite(ps)) attrDockState.pageSize = Math.max(50, Math.min(200, ps));
+      const mode = String(localStorage.getItem('ui.attrDockMode') || 'map');
+      _setAttrDockMode(mode === 'full' ? 'full' : 'map');
+    } catch (e) { /* ignore */ }
+
+    _startResize(leftResizeHandle, 'left');
+    _startResize(rightResizeHandle, 'right');
+    layersCollapseBtn.addEventListener('click', () => _setCollapsed('left', true));
+    toolsCollapseBtn.addEventListener('click', () => _setCollapsed('right', true));
+    layersTab.addEventListener('click', () => _setCollapsed('left', false));
+    toolsTab.addEventListener('click', () => _setCollapsed('right', false));
+
+    // --- 图层右键菜单 + 属性表 Dock ---
+    if (layerCtxMenuEl) {
+      layerCtxMenuEl.addEventListener('click', (ev) => {
+        const btn = ev && ev.target ? ev.target.closest('button[data-action]') : null;
+        if (!btn) return;
+        const action = String(btn.dataset.action || '');
+        const table = layerCtxMenuEl.dataset.table ? String(layerCtxMenuEl.dataset.table) : '';
+        hideLayerCtxMenu();
+
+        if (!table) return;
+        if (action === 'open_attr') {
+          openAttrTableForLayer(table);
+          return;
+        }
+        if (action === 'open_export') {
+          try {
+            if (exportTableEl) exportTableEl.value = table;
+            const d = document.getElementById('exportDetails');
+            if (d) d.open = true;
+            if (toolsPanel && d) {
+              const r = d.getBoundingClientRect();
+              const pr = toolsPanel.getBoundingClientRect();
+              const top = toolsPanel.scrollTop + (r.top - pr.top) - 10;
+              toolsPanel.scrollTo({ top, behavior: 'smooth' });
+            }
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'select_all') {
+          try {
+            selectAllForTable(table);
+            if (exportStatus) exportStatus.textContent = `已全选（表：${table}）`;
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'clear_sel') {
+          try {
+            clearSelectionForTable(table);
+            try { highlightLayer(null); } catch (e) {}
+            if (exportStatus) exportStatus.textContent = `已清除选择（表：${table}）`;
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'remove_layer') {
+          try {
+            removeLayerByTable(table);
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'zoom_to') {
+          try {
+            zoomToLayer(table);
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'set_attr_target') {
+          try {
+            attrTableEl.value = table;
+            populateAttrFieldOptions(table);
+            const d = document.getElementById('attrSelectDetails');
+            if (d) d.open = true;
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'set_loc_target') {
+          try {
+            locTargetEl.value = table;
+            const d = document.getElementById('locSelectDetails');
+            if (d) d.open = true;
+          } catch (e) { /* ignore */ }
+          return;
+        }
+        if (action === 'set_loc_ref') {
+          try {
+            locRefEl.value = table;
+            const d = document.getElementById('locSelectDetails');
+            if (d) d.open = true;
+          } catch (e) { /* ignore */ }
+        }
+      });
+    }
+
+    document.addEventListener('click', (ev) => {
+      if (!layerCtxMenuEl) return;
+      if (layerCtxMenuEl.classList.contains('hidden')) return;
+      if (ev && ev.target && layerCtxMenuEl.contains(ev.target)) return;
+      hideLayerCtxMenu();
+    });
+    document.addEventListener('keydown', (ev) => {
+      if (ev && ev.key === 'Escape') {
+        hideLayerCtxMenu();
+      }
+    });
+
+    if (attrDockTab) {
+      attrDockTab.addEventListener('click', () => {
+        openAttrDock();
+        renderAttrDock();
+      });
+    }
+    if (attrDockMinBtn) {
+      attrDockMinBtn.addEventListener('click', () => {
+        collapseAttrDock();
+      });
+    }
+    if (attrDockWideBtn) {
+      attrDockWideBtn.addEventListener('click', () => {
+        const next = (attrDockUi.mode === 'full') ? 'map' : 'full';
+        _setAttrDockMode(next);
+      });
+    }
+    if (attrDockCloseAllBtn) {
+      attrDockCloseAllBtn.addEventListener('click', () => {
+        closeAllAttrTabs();
+      });
+    }
+    if (attrPrevBtn) {
+      attrPrevBtn.addEventListener('click', () => {
+        const id = attrDockState.activeId;
+        if (!id) return;
+        const cur = Number(attrDockState.pageById.get(id) || 0);
+        attrDockState.pageById.set(id, Math.max(0, cur - 1));
+        renderAttrDock();
+      });
+    }
+    if (attrNextBtn) {
+      attrNextBtn.addEventListener('click', () => {
+        const id = attrDockState.activeId;
+        if (!id) return;
+        const cur = Number(attrDockState.pageById.get(id) || 0);
+        attrDockState.pageById.set(id, cur + 1);
+        renderAttrDock();
+      });
+    }
+
+    if (attrPageSizeEl) {
+      attrPageSizeEl.addEventListener('change', () => {
+        const v = Number(attrPageSizeEl.value || '50');
+        const n = Math.max(50, Math.min(200, v));
+        attrDockState.pageSize = n;
+        try { localStorage.setItem('ui.attrPageSize', String(n)); } catch (e) {}
+        if (attrDockState.activeId) attrDockState.pageById.set(attrDockState.activeId, 0);
+        renderAttrDock();
+      });
+    }
+
+    if (attrDockHandle) {
+      attrDockHandle.addEventListener('mousedown', (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        const startY = ev.clientY;
+        const startH = attrDockEl ? attrDockEl.getBoundingClientRect().height : 0;
+        const wrapRect = document.querySelector('.wrap') ? document.querySelector('.wrap').getBoundingClientRect() : null;
+        const maxH = wrapRect ? Math.max(120, Math.floor(wrapRect.height * 0.85)) : 520;
+        const onMove = (e) => {
+          const dy = e.clientY - startY;
+          const h = startH - dy; // 往上拖 -> 变高
+          if (h <= 60) {
+            collapseAttrDock();
+            return;
+          }
+          openAttrDock();
+          _setAttrHeight(Math.min(maxH, h));
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          document.body.style.cursor = '';
+          _syncAttrDockTab();
+        };
+        document.body.style.cursor = 'row-resize';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
+
+    // 位置选择：点/半径可视化
+    let locPointMarker = null;
+    let locRadiusCircle = null;
+    let locQueryOverlay = null;
+    function _ensureLocQueryOverlay() {
+      if (!map || typeof L === 'undefined') return null;
+      if (!locQueryOverlay) {
+        locQueryOverlay = L.layerGroup();
+        locQueryOverlay.addTo(map);
+      }
+      return locQueryOverlay;
+    }
+
+    function _clearLocQueryOverlay() {
+      if (!locQueryOverlay) return;
+      try { locQueryOverlay.clearLayers(); } catch (e) { /* ignore */ }
+    }
+
+    function _drawQueryCircle(latlng, radiusMeters) {
+      const g = _ensureLocQueryOverlay();
+      if (!g) return;
+      // 只画描边，不填充：多个圆重叠时不会“越叠越深”
+      const c = L.circle(latlng, {
+        radius: Number(radiusMeters),
+        color: '#e74c3c',
+        weight: 2,
+        opacity: 0.8,
+        fillOpacity: 0,
+      });
+      c.addTo(g);
+      const m = L.circleMarker(latlng, {
+        radius: 5,
+        color: '#e74c3c',
+        fillColor: '#e74c3c',
+        fillOpacity: 0.85,
+        weight: 2,
+      });
+      m.addTo(g);
+    }
+
+    function showLocPoint(x, y, radiusMeters) {
+      if (!map || typeof L === 'undefined') return;
+      try {
+        // 单点模式：清除“多圆”覆盖层，避免显示与查询不一致
+        _clearLocQueryOverlay();
+        const latlng = L.latLng(Number(y), Number(x));
+        if (!locPointMarker) {
+          locPointMarker = L.circleMarker(latlng, { radius: 7, color: '#e74c3c', fillColor: '#e74c3c', fillOpacity: 0.8, weight: 2 });
+          locPointMarker.addTo(map);
+        } else {
+          locPointMarker.setLatLng(latlng);
+        }
+        if (radiusMeters && Number(radiusMeters) > 0) {
+          if (!locRadiusCircle) {
+            locRadiusCircle = L.circle(latlng, { radius: Number(radiusMeters), color: '#e74c3c', weight: 1, fillColor: '#e74c3c', fillOpacity: 0.12 });
+            locRadiusCircle.addTo(map);
+          } else {
+            locRadiusCircle.setLatLng(latlng);
+            locRadiusCircle.setRadius(Number(radiusMeters));
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function showLocCirclesFromRefBboxes(refBboxes, radiusMeters) {
+      if (!Array.isArray(refBboxes) || !refBboxes.length) return;
+      const r = Number(radiusMeters);
+      if (!Number.isFinite(r) || r <= 0) return;
+
+      // 多圆模式：移除单点 marker/circle，避免“看见一个旧圆但实际按多个圆查询”的错觉
+      try {
+        if (locPointMarker && map && map.hasLayer(locPointMarker)) map.removeLayer(locPointMarker);
+        if (locRadiusCircle && map && map.hasLayer(locRadiusCircle)) map.removeLayer(locRadiusCircle);
+      } catch (e) { /* ignore */ }
+      locPointMarker = null;
+      locRadiusCircle = null;
+
+      _clearLocQueryOverlay();
+      for (const bb of refBboxes) {
+        if (!bb) continue;
+        const minx = Number(bb.minx), miny = Number(bb.miny), maxx = Number(bb.maxx), maxy = Number(bb.maxy);
+        if (!Number.isFinite(minx) || !Number.isFinite(miny) || !Number.isFinite(maxx) || !Number.isFinite(maxy)) continue;
+        const cx = (minx + maxx) / 2;
+        const cy = (miny + maxy) / 2;
+        try {
+          const latlng = L.latLng(cy, cx);
+          _drawQueryCircle(latlng, r);
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    // 多图层管理：支持叠加显示、隐藏/显示、移除
+    const layersState = [];
+
+    function updateTopoTableOptions() {
+      const prev = topoTableEl.value;
+      const lineTables = layersState
+        .filter(it => !!it && it.hasLines)
+        .map(it => it.table);
+
+      topoTableEl.innerHTML = '';
+      if (lineTables.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '（请先加载线图层）';
+        topoTableEl.appendChild(opt);
+
+        // 没有可用线图层：检查状态作废
+        topoCheckToken = null;
+        topoCheckTokenTable = null;
+        setTopoRepairEnabled(false);
+        return;
+      }
+      for (const t of lineTables) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        topoTableEl.appendChild(opt);
+      }
+      if (lineTables.includes(prev)) {
+        topoTableEl.value = prev;
+      }
+
+      // 如果当前选择与 token 不匹配（或 token 对应表已不可用），则作废
+      if (!topoCheckToken || topoCheckTokenTable !== topoTableEl.value || !lineTables.includes(topoCheckTokenTable)) {
+        topoCheckToken = null;
+        topoCheckTokenTable = null;
+        setTopoRepairEnabled(false);
+      }
+
+      // 默认结果图层名
+      if (!topoOutNameEl.value) {
+        const base = topoTableEl.value || (lineTables[0] || 'layer');
+        topoOutNameEl.value = `${base}_repaired_tmp`;
+      }
+    }
+
+    topoTableEl.addEventListener('change', () => {
+      const base = topoTableEl.value || 'layer';
+      topoOutNameEl.value = `${base}_repaired_tmp`;
+
+      // 选择变化：强制重新检查
+      topoCheckToken = null;
+      topoCheckTokenTable = null;
+      setTopoRepairEnabled(false);
+    });
+
+    function findLayerItemByTable(tableName) {
+      return layersState.find(x => x.table === tableName) || null;
+    }
+
+    function hideLayerCtxMenu() {
+      if (!layerCtxMenuEl) return;
+      try { layerCtxMenuEl.classList.add('hidden'); } catch (e) { /* ignore */ }
+      try { delete layerCtxMenuEl.dataset.table; } catch (e) { /* ignore */ }
+    }
+
+    function showLayerCtxMenu(clientX, clientY, tableName) {
+      if (!layerCtxMenuEl) return;
+      if (!tableName) return;
+      layerCtxMenuEl.dataset.table = String(tableName);
+      layerCtxMenuEl.classList.remove('hidden');
+
+      // 先放到鼠标位置，再做一次边界修正
+      let x = Number(clientX);
+      let y = Number(clientY);
+      if (!Number.isFinite(x)) x = 12;
+      if (!Number.isFinite(y)) y = 12;
+      layerCtxMenuEl.style.left = `${x}px`;
+      layerCtxMenuEl.style.top = `${y}px`;
+
+      try {
+        const rect = layerCtxMenuEl.getBoundingClientRect();
+        const pad = 8;
+        const vw = window.innerWidth || 1024;
+        const vh = window.innerHeight || 768;
+        if (rect.right > vw - pad) x = Math.max(pad, vw - pad - rect.width);
+        if (rect.bottom > vh - pad) y = Math.max(pad, vh - pad - rect.height);
+        layerCtxMenuEl.style.left = `${x}px`;
+        layerCtxMenuEl.style.top = `${y}px`;
+      } catch (e) { /* ignore */ }
+    }
+
+    function _setAttrHeight(px) {
+      const n = Math.max(0, Math.min(800, Number(px)));
+      if (!Number.isFinite(n)) return;
+      document.documentElement.style.setProperty('--attr-h', `${n}px`);
+      try { localStorage.setItem('ui.attrHeight', String(n)); } catch (e) {}
+    }
+
+    function _computeAttrDockOffsets() {
+      const wrap = document.querySelector('.wrap');
+      const mapWrap = document.querySelector('.map-wrap');
+      if (!wrap || !mapWrap) return { left: 0, right: 0 };
+      try {
+        const wr = wrap.getBoundingClientRect();
+        const mr = mapWrap.getBoundingClientRect();
+        const left = Math.max(0, mr.left - wr.left);
+        const right = Math.max(0, wr.right - mr.right);
+        return { left, right };
+      } catch (e) {
+        return { left: 0, right: 0 };
+      }
+    }
+
+    function _applyAttrDockOffsets() {
+      if (!attrDockEl) return;
+      if (attrDockUi.mode !== 'map') return;
+      const off = _computeAttrDockOffsets();
+      document.documentElement.style.setProperty('--attr-left', `${Math.floor(off.left)}px`);
+      document.documentElement.style.setProperty('--attr-right', `${Math.floor(off.right)}px`);
+      try {
+        if (attrDockTab) {
+          const wrap = document.querySelector('.wrap');
+          const wr = wrap ? wrap.getBoundingClientRect() : null;
+          const cx = wr ? Math.floor(off.left + (wr.width - off.left - off.right) / 2) : null;
+          if (cx !== null && Number.isFinite(cx)) {
+            attrDockTab.style.left = `${cx}px`;
+            attrDockTab.style.transform = 'translateX(-50%)';
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function _setAttrDockMode(mode) {
+      const m = (mode === 'full') ? 'full' : 'map';
+      attrDockUi.mode = m;
+      try { localStorage.setItem('ui.attrDockMode', m); } catch (e) {}
+      if (!attrDockEl) return;
+      if (m === 'full') {
+        attrDockEl.classList.add('fullwidth');
+        document.documentElement.style.setProperty('--attr-left', '0px');
+        document.documentElement.style.setProperty('--attr-right', '0px');
+        if (attrDockWideBtn) attrDockWideBtn.textContent = '仅地图';
+        try { if (attrDockTab) { attrDockTab.style.left = '50%'; attrDockTab.style.transform = 'translateX(-50%)'; } } catch (e) {}
+      } else {
+        attrDockEl.classList.remove('fullwidth');
+        _applyAttrDockOffsets();
+        if (attrDockWideBtn) attrDockWideBtn.textContent = '放大';
+      }
+    }
+
+    function _syncAttrDockTab() {
+      const hasTabs = Array.isArray(attrDockState.tabs) && attrDockState.tabs.length > 0;
+      const collapsed = attrDockEl && attrDockEl.classList.contains('collapsed');
+      if (!attrDockTab) return;
+      if (hasTabs && collapsed) attrDockTab.classList.remove('hidden');
+      else attrDockTab.classList.add('hidden');
+    }
+
+    function openAttrDock() {
+      if (!attrDockEl) return;
+      attrDockEl.classList.remove('collapsed');
+      attrDockEl.setAttribute('aria-hidden', 'false');
+      const prev = Number((localStorage.getItem('ui.attrHeight') || '260'));
+      const h = (Number.isFinite(prev) && prev > 60) ? prev : 260;
+      _setAttrHeight(h);
+      _applyAttrDockOffsets();
+      _syncAttrDockTab();
+    }
+
+    function collapseAttrDock() {
+      if (!attrDockEl) return;
+      attrDockEl.classList.add('collapsed');
+      attrDockEl.setAttribute('aria-hidden', 'true');
+      _setAttrHeight(0);
+      _syncAttrDockTab();
+    }
+
+    function closeAllAttrTabs() {
+      attrDockState.tabs = [];
+      attrDockState.activeId = null;
+      attrDockState.pageById = new Map();
+      try { renderAttrDock(); } catch (e) { /* ignore */ }
+      collapseAttrDock();
+    }
+
+    function _stringifyCell(v) {
+      if (v === null || typeof v === 'undefined') return '';
+      if (typeof v === 'string') return v;
+      if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+      try {
+        const s = JSON.stringify(v);
+        return s && s.length > 240 ? `${s.slice(0, 240)}…` : (s || '');
+      } catch (e) {
+        return String(v);
+      }
+    }
+
+    function _collectAttrColumns(features) {
+      const cols = [];
+      const seen = new Set();
+      const push = (c) => {
+        const s = String(c || '').trim();
+        if (!s) return;
+        const key = s.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        cols.push(s);
+      };
+
+      // 常用字段优先
+      push('id');
+      push('geom_type');
+      push('lon');
+      push('lat');
+
+      const limit = Math.min(400, Array.isArray(features) ? features.length : 0);
+      for (let i = 0; i < limit; i++) {
+        const f = features[i];
+        const p = (f && f.properties && typeof f.properties === 'object') ? f.properties : null;
+        if (!p) continue;
+        for (const k of Object.keys(p)) {
+          if (k === 'properties') continue;
+          push(k);
+        }
+        const nested = p.properties;
+        if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+          for (const k of Object.keys(nested)) {
+            push(`properties.${k}`);
+          }
+        }
+      }
+      return cols;
+    }
+
+    function _getCell(feature, col) {
+      const p = (feature && feature.properties && typeof feature.properties === 'object') ? feature.properties : null;
+      if (!p) return '';
+      if (col.startsWith('properties.')) {
+        const key = col.slice('properties.'.length);
+        const nested = p.properties;
+        if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+          return _stringifyCell(nested[key]);
+        }
+        return '';
+      }
+      return _stringifyCell(p[col]);
+    }
+
+    function ensureAttrTab(tableName) {
+      const table = String(tableName || '').trim();
+      if (!table) return null;
+      const id = table;
+      const exists = (attrDockState.tabs || []).find((t) => t && t.id === id);
+      if (!exists) {
+        attrDockState.tabs = (attrDockState.tabs || []).concat([{ id, table }]);
+      }
+      if (!attrDockState.pageById.has(id)) attrDockState.pageById.set(id, 0);
+      attrDockState.activeId = id;
+      return id;
+    }
+
+    function removeAttrTab(tabId) {
+      const id = String(tabId || '');
+      attrDockState.tabs = (attrDockState.tabs || []).filter((t) => t && t.id !== id);
+      attrDockState.pageById.delete(id);
+      if (attrDockState.activeId === id) {
+        const next = (attrDockState.tabs[0] && attrDockState.tabs[0].id) ? attrDockState.tabs[0].id : null;
+        attrDockState.activeId = next;
+      }
+      renderAttrDock();
+      if (!attrDockState.tabs.length) collapseAttrDock();
+    }
+
+    function renderAttrDock() {
+      if (!attrTabsEl || !attrDockTableEl || !attrDockStatusEl || !attrPagerInfoEl) return;
+
+      const tabs = Array.isArray(attrDockState.tabs) ? attrDockState.tabs : [];
+      const activeId = attrDockState.activeId;
+      try { if (attrPageSizeEl) attrPageSizeEl.value = String(attrDockState.pageSize || 50); } catch (e) { /* ignore */ }
+
+      // tabs
+      attrTabsEl.innerHTML = '';
+      for (const t of tabs) {
+        const btn = document.createElement('div');
+        btn.className = `attrdock-tabbtn${t.id === activeId ? ' active' : ''}`;
+        btn.dataset.id = t.id;
+        btn.textContent = t.table;
+        const x = document.createElement('span');
+        x.className = 'x';
+        x.textContent = '×';
+        x.title = '关闭';
+        btn.appendChild(x);
+        btn.addEventListener('click', (ev) => {
+          const isClose = ev && ev.target && ev.target.classList && ev.target.classList.contains('x');
+          if (isClose) {
+            removeAttrTab(t.id);
+            return;
+          }
+          attrDockState.activeId = t.id;
+          renderAttrDock();
+        });
+        attrTabsEl.appendChild(btn);
+      }
+
+      if (!activeId) {
+        attrDockStatusEl.textContent = tabs.length ? '请选择一个属性表标签。' : '暂无属性表。';
+        attrDockTableEl.innerHTML = '';
+        attrPagerInfoEl.textContent = '';
+        _syncAttrDockTab();
+        return;
+      }
+
+      const tab = tabs.find((t) => t && t.id === activeId) || null;
+      const table = tab ? tab.table : '';
+      const item = findLayerItemByTable(table);
+      if (!item || !item.dataLayer || !item.dataLayer.toGeoJSON) {
+        attrDockStatusEl.textContent = `图层未加载或不可用：${table}`;
+        attrDockTableEl.innerHTML = '';
+        attrPagerInfoEl.textContent = '';
+        _syncAttrDockTab();
+        return;
+      }
+
+      let features = [];
+      try {
+        if (Array.isArray(item.featureList)) {
+          features = item.featureList;
+        }
+        if (!features || !features.length) {
+          features = _collectFeatureRefsFromDataLayer(item.dataLayer);
+          item.featureList = features;
+        }
+      } catch (e) {
+        features = [];
+      }
+
+      const cols = _collectAttrColumns(features);
+      const total = features.length;
+      const pageSize = Math.max(1, Number(attrDockState.pageSize) || 50);
+      const pages = total ? Math.ceil(total / pageSize) : 1;
+      let page = Number(attrDockState.pageById.get(activeId) || 0);
+      if (!Number.isFinite(page) || page < 0) page = 0;
+      if (page >= pages) page = pages - 1;
+      attrDockState.pageById.set(activeId, page);
+
+      const start = page * pageSize;
+      const end = Math.min(total, start + pageSize);
+
+      attrDockStatusEl.textContent = `表：${table}；行：${total}；列：${cols.length}`;
+      attrPagerInfoEl.textContent = `第 ${page + 1} / ${pages} 页（${start + 1}-${end}）`;
+
+      // table
+      const thead = document.createElement('thead');
+      const trh = document.createElement('tr');
+      for (const c of cols) {
+        const th = document.createElement('th');
+        th.textContent = c;
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+
+      const tbody = document.createElement('tbody');
+      for (let i = start; i < end; i++) {
+        const f = features[i];
+        const tr = document.createElement('tr');
+        for (const c of cols) {
+          const td = document.createElement('td');
+          td.textContent = _getCell(f, c);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+
+      attrDockTableEl.innerHTML = '';
+      attrDockTableEl.appendChild(thead);
+      attrDockTableEl.appendChild(tbody);
+      try { _applyAttrDockOffsets(); } catch (e) { /* ignore */ }
+      _syncAttrDockTab();
+    }
+
+    function openAttrTableForLayer(tableName) {
+      const id = ensureAttrTab(tableName);
+      if (!id) return;
+      openAttrDock();
+      renderAttrDock();
+    }
+
+    function renderLayerList() {
+      layerListEl.innerHTML = '';
+      if (layersState.length === 0) {
+        layerListEl.innerHTML = '<div style="font-size:12px; color:#666;">暂无图层</div>';
+        updateTopoTableOptions();
+        return;
+      }
+      for (const item of layersState.slice().reverse()) {
+        const wrap = document.createElement('div');
+        wrap.className = 'layer-item';
+        wrap.addEventListener('contextmenu', (ev) => {
+          try {
+            ev.preventDefault();
+            showLayerCtxMenu(ev.clientX, ev.clientY, item.table);
+          } catch (e) { /* ignore */ }
+        });
+
+        const title = document.createElement('div');
+        title.className = 'layer-title';
+
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = item.visible;
+        cb.addEventListener('change', () => {
+          item.visible = cb.checked;
+          if (!map) return;
+          if (item.visible) {
+            item.layer.addTo(map);
+          } else {
+            map.removeLayer(item.layer);
+          }
+        });
+
+        const text = document.createElement('span');
+        text.textContent = item.name;
+        label.appendChild(cb);
+        label.appendChild(text);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'secondary';
+        removeBtn.textContent = '移除';
+        removeBtn.addEventListener('click', () => {
+          removeLayerByTable(item.table);
+        });
+
+        title.appendChild(label);
+        title.appendChild(removeBtn);
+        wrap.appendChild(title);
+
+        const meta = document.createElement('div');
+        meta.className = 'layer-meta';
+        meta.textContent = item.meta;
+        wrap.appendChild(meta);
+
+        layerListEl.appendChild(wrap);
+      }
+
+      updateTopoTableOptions();
+      updateSelectToolOptions();
+    }
+
+    clearAllBtn.addEventListener('click', () => {
+      if (map) {
+        for (const item of layersState) {
+          if (map.hasLayer(item.layer)) map.removeLayer(item.layer);
+        }
+      }
+      layersState.length = 0;
+      selectionState.clear();
+      try {
+        if (locPointMarker && map && map.hasLayer(locPointMarker)) map.removeLayer(locPointMarker);
+        if (locRadiusCircle && map && map.hasLayer(locRadiusCircle)) map.removeLayer(locRadiusCircle);
+      } catch (e) {}
+      locPointMarker = null;
+      locRadiusCircle = null;
+      try { _clearLocQueryOverlay(); } catch (e) {}
+      renderLayerList();
+    });
+
+    function clearAllSelections() {
+      // 1) 清除所有图层选择高亮
+      try {
+        for (const item of layersState) {
+          if (!item || !item.table) continue;
+          clearSelectionForTable(item.table);
+        }
+        selectionState.clear();
+      } catch (e) { /* ignore */ }
+
+      // 2) 清除“按位置选择”的范围标注（点/圆/多圆覆盖层）
+      try {
+        if (locPointMarker && map && map.hasLayer(locPointMarker)) map.removeLayer(locPointMarker);
+        if (locRadiusCircle && map && map.hasLayer(locRadiusCircle)) map.removeLayer(locRadiusCircle);
+      } catch (e) { /* ignore */ }
+      locPointMarker = null;
+      locRadiusCircle = null;
+      try { _clearLocQueryOverlay(); } catch (e) { /* ignore */ }
+
+      // 3) 清除单个要素的点击高亮
+      try { highlightLayer(null); } catch (e) { /* ignore */ }
+
+      // 4) 状态文本同步
+      try { if (attrStatus) attrStatus.textContent = '已清除全部图层选择'; } catch (e) {}
+      try { if (locStatus) locStatus.textContent = '已清除全部图层选择与范围标注'; } catch (e) {}
+    }
+
+    clearSelectionAllBtn.addEventListener('click', () => {
+      clearAllSelections();
+    });
+
+    // 点击高亮（用于更突出当前选中要素）
+    let highlighted = null;
+    function highlightLayer(layer) {
+      // 还原上一个
+      if (highlighted && highlighted.layer) {
+        const prev = highlighted;
+        try {
+          if (prev.layer.setStyle && prev.style) {
+            prev.layer.setStyle(prev.style);
+          }
+          if (prev.layer.setRadius && typeof prev.radius === 'number') {
+            prev.layer.setRadius(prev.radius);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      highlighted = null;
+      if (!layer) return;
+      if (!layer.setStyle && !layer.setRadius) return;
+
+      const saved = {
+        layer,
+        style: layer.options ? {
+          color: layer.options.color,
+          weight: layer.options.weight,
+          opacity: layer.options.opacity,
+          fillColor: layer.options.fillColor,
+          fillOpacity: layer.options.fillOpacity,
+        } : null,
+        radius: (layer.getRadius ? layer.getRadius() : undefined),
+      };
+      highlighted = saved;
+
+      try {
+        if (layer.setStyle) {
+          layer.setStyle({
+            color: '#f1c40f',
+            weight: Math.max(4, (layer.options && layer.options.weight) ? (layer.options.weight + 2) : 6),
+            opacity: 1,
+            fillColor: '#f1c40f',
+            fillOpacity: 0.85,
+          });
+        }
+        if (layer.setRadius && layer.getRadius) {
+          layer.setRadius(Math.max(8, layer.getRadius() + 2));
+        }
+        if (layer.bringToFront) layer.bringToFront();
+      } catch (e) { /* ignore */ }
+    }
+
+    function currentBbox() {
+      if (!map) return null;
+      const b = map.getBounds();
+      return { minx: b.getWest(), miny: b.getSouth(), maxx: b.getEast(), maxy: b.getNorth() };
+    }
+
+    function _cssVar(name, fallback) {
+      try {
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+        const s = (v || '').trim();
+        return s || fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function _randomLayerColor() {
+      // Vibrant palette (allows repeats).
+      const palette = [
+        '#0969da', '#1f6feb', '#8250df', '#bf3989', '#d1242f',
+        '#1f883d', '#0a3d62', '#e67e22', '#16a085', '#2980b9',
+        '#8e44ad', '#c0392b', '#2c3e50', '#2da44e', '#cf222e',
+      ];
+      try {
+        const i = Math.floor(Math.random() * palette.length);
+        return palette[Math.max(0, Math.min(palette.length - 1, i))];
+      } catch (e) {
+        return _cssVar('--mapFeature', '#0a3d62');
+      }
+    }
+
+    function _escapeHtml(s) {
+      return String(s)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function _renderFeaturePopupHtml(feature) {
+      const props = (feature && feature.properties) ? feature.properties : {};
+      const entries = Object.entries(props || {});
+
+      const renderValue = (k, v) => {
+        if (v === null || typeof v === 'undefined') {
+          return `<div><strong>${_escapeHtml(k)}</strong>: </div>`;
+        }
+        if (typeof v === 'object') {
+          const json = _escapeHtml(JSON.stringify(v, null, 2));
+          return `
+            <details style="margin:6px 0;">
+              <summary><strong>${_escapeHtml(k)}</strong></summary>
+              <pre style="white-space:pre-wrap; margin:6px 0 0;">${json}</pre>
+            </details>
+          `;
+        }
+        return `<div><strong>${_escapeHtml(k)}</strong>: ${_escapeHtml(v)}</div>`;
+      };
+
+      return entries.map(([k, v]) => renderValue(k, v)).join('');
+    }
+
+    function _extractPropFieldOptionsFromFeatures(fc, maxN) {
+      const options = [];
+      const seenLower = new Set();
+      try {
+        const feats = (fc && Array.isArray(fc.features)) ? fc.features : [];
+        const limit = Math.min(Number(maxN || 400) || 400, feats.length);
+        for (let i = 0; i < limit; i++) {
+          const f = feats[i];
+          const p = (f && f.properties && typeof f.properties === 'object') ? f.properties : null;
+          if (!p) continue;
+          const nested = (p.properties && typeof p.properties === 'object' && !Array.isArray(p.properties)) ? p.properties : null;
+          const src = nested || p;
+          for (const k of Object.keys(src)) {
+            if (String(k).toLowerCase() === 'properties') continue;
+            _uniqPush(options, seenLower, `properties.${String(k)}`);
+          }
+        }
+      } catch (e) { /* ignore */ }
+      return options;
+    }
+
+    function _collectFeatureRefsFromDataLayer(dataLayer) {
+      const out = [];
+      const seen = new Set();
+      const walk = (layer) => {
+        if (!layer) return;
+        if (layer.feature && typeof layer.feature === 'object') {
+          const key = _featureKey(layer.feature) || '';
+          if (!key || !seen.has(key)) {
+            if (key) seen.add(key);
+            out.push(layer.feature);
+          }
+          return;
+        }
+        if (layer.eachLayer) {
+          try { layer.eachLayer((c) => walk(c)); } catch (e) { /* ignore */ }
+        }
+      };
+      try { walk(dataLayer); } catch (e) { /* ignore */ }
+      return out;
+    }
+
+    function ensureTopoOverlays(item) {
+      if (!item) return;
+      if (!item.overlays) {
+        const issueColor = (kind) => {
+          if (kind === 'cross_without_node') return '#e74c3c';
+          if (kind === 'endpoint_on_segment') return '#f39c12';
+          // dangling 默认不展示；其他类型给一个中性颜色
+          return '#8e44ad';
+        };
+        item.overlays = {
+          issuesLayer: L.geoJSON({ type: 'FeatureCollection', features: [] }, {
+            // 只标注交叉/端点落线段等“非悬挂”问题；悬挂点不在前端显示
+            filter: (f) => {
+              const k = (f && f.properties && f.properties.kind) ? String(f.properties.kind) : '';
+              return k !== 'dangling_endpoint';
+            },
+            pointToLayer: (f, latlng) => {
+              const k = (f && f.properties && f.properties.kind) ? String(f.properties.kind) : '';
+              const c = issueColor(k);
+              return L.circleMarker(latlng, { radius: 5, color: c, fillColor: c, fillOpacity: 0.9 });
+            },
+            onEachFeature: (_f, l) => { try { l.on('click', () => highlightLayer(l)); } catch (e) {} }
+          }),
+          repairsLayer: L.geoJSON({ type: 'FeatureCollection', features: [] }, {
+            style: () => ({ color: '#2ecc71', weight: 4, opacity: 1 }),
+            onEachFeature: (_f, l) => { try { l.on('click', () => highlightLayer(l)); } catch (e) {} }
+          })
+        };
+        item.layer.addLayer(item.overlays.issuesLayer);
+        item.layer.addLayer(item.overlays.repairsLayer);
+      }
+    }
+
+    function clearTopoOverlays(table) {
+      const item = findLayerItemByTable(table);
+      if (!item || !item.overlays) return;
+      item.overlays.issuesLayer.clearLayers();
+      item.overlays.repairsLayer.clearLayers();
+    }
+
+    async function loadGeoJSON() {
+      const table = tableSelect.value;
+      const lon = lonSelect.value;
+      const lat = latSelect.value;
+
+      const params = new URLSearchParams();
+      if (lon) params.set('lon', lon);
+      if (lat) params.set('lat', lat);
+
+      // 可选：限制返回数量（防止超大表导致浏览器内存飙升）
+      try {
+        const raw = loadLimitEl ? String(loadLimitEl.value || '').trim() : '';
+        if (raw) {
+          const lim = parseInt(raw, 10);
+          if (Number.isFinite(lim) && lim > 0) params.set('limit', String(Math.min(200000, lim)));
+        }
+      } catch (e) { /* ignore */ }
+
+      // 可选：按当前视野 bbox 加载（性能更好，但视野外要素不会返回）
+      try {
+        if (loadBboxEl && loadBboxEl.checked && map) {
+          const b = map.getBounds();
+          params.set('minx', String(b.getWest()));
+          params.set('miny', String(b.getSouth()));
+          params.set('maxx', String(b.getEast()));
+          params.set('maxy', String(b.getNorth()));
+        }
+      } catch (e) { /* ignore */ }
+
+      const base = geojsonUrlTemplate.replace('__TABLE__', encodeURIComponent(table));
+      const url = params.toString() ? `${base}?${params.toString()}` : base;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`GeoJSON 请求失败：${res.status} ${res.statusText}\n${text.slice(0, 300)}`);
+      }
+      const data = await res.json();
+
+      if (!map || typeof L === 'undefined') return;
+
+      let tableItem = findLayerItemByTable(table);
+      const baseColor = (tableItem && tableItem.color) ? tableItem.color : _randomLayerColor();
+      const propFieldOptions = _extractPropFieldOptionsFromFeatures(data, 400);
+
+      const hasPoints = Array.isArray(data.features) && data.features.some((f) => {
+        const t = f && f.geometry ? f.geometry.type : '';
+        return t === 'Point' || t === 'MultiPoint';
+      });
+      const hasLines = Array.isArray(data.features) && data.features.some((f) => {
+        const t = f && f.geometry ? f.geometry.type : '';
+        return t === 'LineString' || t === 'MultiLineString';
+      });
+
+      // 该表对应一个 LayerGroup：主数据层 + 拓扑标注层（红点/绿线）
+      const makeGeoLayer = (geojson) => L.geoJSON(geojson, {
+        pointToLayer: (_feature, latlng) => {
+          // 用 CircleMarker 以支持 setStyle 高亮
+          const base = baseColor;
+          return L.circleMarker(latlng, {
+            radius: 6,
+            color: base,
+            weight: 2,
+            opacity: 1,
+            fillColor: base,
+            fillOpacity: 0.7,
+          });
+        },
+        style: (feature) => {
+          const t = (feature && feature.geometry && feature.geometry.type) || '';
+          if (t === 'LineString' || t === 'MultiLineString') {
+            return { color: baseColor, weight: 3, opacity: 1 };
+          }
+          return undefined;
+        },
+        onEachFeature: (feature, l) => {
+          // 在任何高亮/选择之前记录基础样式，避免“黄色被当成原始样式”
+          try { rememberBaseStyle(l); } catch (e) {}
+
+          // 点击高亮，便于观察/对照（例如拓扑修复前后）
+          try {
+            l.on('click', () => {
+              toggleFeatureSelection(table, feature);
+              const key = _featureKey(feature);
+              const sel = key ? getSelection(table) : null;
+              if (key && sel && sel.ids && sel.ids.has(key)) {
+                highlightLayer(l);
+              } else {
+                highlightLayer(null);
+              }
+              // Lazy popup: avoid allocating HTML for every feature up front
+              try {
+                if (!l.getPopup || !l.getPopup()) {
+                  l.bindPopup(_renderFeaturePopupHtml(feature), { maxWidth: 420 });
+                }
+                if (l.openPopup) l.openPopup();
+              } catch (e) { /* ignore */ }
+            });
+          } catch (e) { /* ignore */ }
+
+          // 拓扑工具按“整层线图层（表）”执行，不再依赖点选单条线
+        }
+      });
+
+      const newGeoLayer = makeGeoLayer(data);
+
+      if (tableItem) {
+        // 替换主数据层：先移除旧主层（保留 overlays 与用户的可见性）
+        if (tableItem.dataLayer) {
+          try { tableItem.layer.removeLayer(tableItem.dataLayer); } catch (e) {}
+        }
+        tableItem.dataLayer = newGeoLayer;
+        tableItem.hasLines = hasLines;
+        tableItem.hasPoints = hasPoints;
+        tableItem.color = baseColor;
+        tableItem.propFieldOptions = propFieldOptions;
+        tableItem.featureList = (data && Array.isArray(data.features)) ? data.features : [];
+        tableItem.layer.addLayer(newGeoLayer);
+        ensureTopoOverlays(tableItem);
+        if (!tableItem.visible && map && map.hasLayer(tableItem.layer)) {
+          map.removeLayer(tableItem.layer);
+        }
+      } else {
+        const group = L.layerGroup();
+        group.addLayer(newGeoLayer);
+        if (map) group.addTo(map);
+        tableItem = {
+          table,
+          name: table,
+          meta: '',
+          visible: true,
+          hasLines,
+          hasPoints,
+          color: baseColor,
+          propFieldOptions: propFieldOptions,
+          featureList: (data && Array.isArray(data.features)) ? data.features : [],
+          layer: group,
+          dataLayer: newGeoLayer,
+          overlays: null,
+        };
+        ensureTopoOverlays(tableItem);
+        layersState.push(tableItem);
+      }
+
+      // 如果该表之前已有“选择状态”（例如先按属性选择、后加载图层），加载后立刻高亮
+      try {
+        if (selectionState.has(table)) {
+          const sel = selectionState.get(table);
+          if (sel && sel.ids && sel.ids.size > 0) applySelectionStyles(tableItem);
+        }
+      } catch (e) { /* ignore */ }
+
+      try {
+        const bounds = newGeoLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [20,20] });
+      } catch (e) { /* ignore */ }
+
+      const count = Array.isArray(data.features) ? data.features.length : 0;
+      const meta = `要素数：${count}；经纬度字段：${lon || '（geometry）'} / ${lat || '（geometry）'}`;
+
+      // 表名在后端保证唯一：前端图层也按表名唯一；同表再次加载 -> 替换图层
+      tableItem.meta = meta;
+      renderLayerList();
+
+      // 体验优化：当加载的是线图层时，默认将拓扑工具的下拉切换到该表。
+      // 否则容易出现“地图上看的是 A，但拓扑检查用的是之前的 B”。
+      if (hasLines) {
+        try {
+          updateTopoTableOptions();
+          if (topoTableEl && topoTableEl.value !== table) {
+            topoTableEl.value = table;
+          }
+          if (topoOutNameEl && !topoOutNameEl.value) {
+            topoOutNameEl.value = `${table}_repaired_tmp`;
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    loadBtn.addEventListener('click', () => {
+      loadGeoJSON().catch(err => {
+        console.error(err);
+        alert(err.message || String(err));
+      });
+    });
+
+    // --- 导入文件选择按钮美化 ---
+    try {
+      if (importFileBtn && importFileEl) {
+        importFileBtn.addEventListener('click', () => {
+          try { importFileEl.click(); } catch (e) { /* ignore */ }
+        });
+        importFileEl.addEventListener('change', () => {
+          const f = (importFileEl.files && importFileEl.files[0]) ? importFileEl.files[0] : null;
+          if (importFileNameEl) importFileNameEl.textContent = f ? String(f.name || '已选择文件') : '未选择文件';
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    // --- 按属性选择 ---
+    attrTableEl.addEventListener('change', () => {
+      try { populateAttrFieldOptions(attrTableEl.value); } catch (e) { /* ignore */ }
+    });
+
+    try {
+      if (attrAddCondBtn) {
+        attrAddCondBtn.addEventListener('click', () => {
+          try { _addAttrConditionRow(); } catch (e) { /* ignore */ }
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    attrSelectBtn.addEventListener('click', async () => {
+      attrStatus.textContent = '';
+      const table = attrTableEl.value;
+      if (!table) {
+        alert('请先选择目标表');
+        return;
+      }
+
+      const rows = attrConditionsEl ? Array.from(attrConditionsEl.querySelectorAll('.attr-cond-row')) : [];
+      const conditions = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const join = row.querySelector('select.attr-cond-join');
+        const field = row.querySelector('select.attr-cond-field');
+        const op = row.querySelector('select.attr-cond-op');
+        const value = row.querySelector('input.attr-cond-value');
+
+        const fieldValue = (field && field.value ? String(field.value) : '').trim();
+        const opValue = (op && op.value ? String(op.value) : '=').trim();
+        const valueValue = (value && value.value !== undefined && value.value !== null) ? String(value.value).trim() : '';
+
+        if (!fieldValue) {
+          alert('请为每个约束选择字段');
+          return;
+        }
+        if (!valueValue) {
+          alert('请为每个约束填写比较值');
+          return;
+        }
+        const c = { field: fieldValue, op: opValue, value: valueValue };
+        if (i > 0) {
+          const j = (join && join.value) ? String(join.value).trim().toUpperCase() : 'AND';
+          c.join = (j === 'OR') ? 'OR' : 'AND';
+        }
+        conditions.push(c);
+      }
+      if (!conditions.length) {
+        alert('请至少添加一个约束');
+        return;
+      }
+      try {
+        const res = await fetch(selectAttrUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, conditions }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `选择失败：${res.status}`);
+        }
+        if (!data.ids || !data.ids.length) {
+          alert('未找到符合条件的要素');
+          attrStatus.textContent = `未找到要素（表：${table}）`;
+          clearSelectionForTable(table);
+          return;
+        }
+        setSelectionForTable(table, data.ids, data.bboxes);
+        attrStatus.textContent = `已选择 ${data.count} 个要素（表：${table}）`;
+      } catch (e) {
+        console.error(e);
+        alert(e.message || String(e));
+      }
+    });
+
+    attrClearBtn.addEventListener('click', () => {
+      const table = attrTableEl.value;
+      if (!table) return;
+      clearSelectionForTable(table);
+      attrStatus.textContent = `已清除选择（表：${table}）`;
+      try { highlightLayer(null); } catch (e) { /* ignore */ }
+    });
+
+    // --- 最短路径 ---
+    let routePickMode = null; // 'start' | 'end'
+    let routeStart = null; // {x,y}
+    let routeEnd = null; // {x,y}
+    let routeStartMarker = null;
+    let routeEndMarker = null;
+
+    function _setRouteInput() {
+      try { if (routeStartEl) routeStartEl.value = routeStart ? `${routeStart.x.toFixed(6)}, ${routeStart.y.toFixed(6)}` : ''; } catch (e) {}
+      try { if (routeEndEl) routeEndEl.value = routeEnd ? `${routeEnd.x.toFixed(6)}, ${routeEnd.y.toFixed(6)}` : ''; } catch (e) {}
+    }
+
+    function _setRouteMarker(kind, x, y) {
+      if (!map || typeof L === 'undefined') return;
+      const latlng = L.latLng(Number(y), Number(x));
+      const color = (kind === 'start') ? '#2da44e' : '#cf222e';
+      const radius = (kind === 'start') ? 8 : 8;
+      let m = (kind === 'start') ? routeStartMarker : routeEndMarker;
+      if (!m) {
+        m = L.circleMarker(latlng, { radius, color, fillColor: color, fillOpacity: 0.9, weight: 2 });
+        m.addTo(map);
+        if (kind === 'start') routeStartMarker = m;
+        else routeEndMarker = m;
+      } else {
+        m.setLatLng(latlng);
+      }
+    }
+
+    function clearRoutePoints() {
+      routePickMode = null;
+      routeStart = null;
+      routeEnd = null;
+      _setRouteInput();
+      try { if (routeStartMarker && map && map.hasLayer(routeStartMarker)) map.removeLayer(routeStartMarker); } catch (e) {}
+      try { if (routeEndMarker && map && map.hasLayer(routeEndMarker)) map.removeLayer(routeEndMarker); } catch (e) {}
+      routeStartMarker = null;
+      routeEndMarker = null;
+      if (routeStatus) routeStatus.textContent = '';
+    }
+
+    if (routePickStartBtn) {
+      routePickStartBtn.addEventListener('click', () => {
+        if (!map) return;
+        routePickMode = 'start';
+        pickingPoint = false;
+        if (routeStatus) routeStatus.textContent = '请在地图上点击起点…';
+      });
+    }
+    if (routePickEndBtn) {
+      routePickEndBtn.addEventListener('click', () => {
+        if (!map) return;
+        routePickMode = 'end';
+        pickingPoint = false;
+        if (routeStatus) routeStatus.textContent = '请在地图上点击终点…';
+      });
+    }
+    if (routeClearBtn) {
+      routeClearBtn.addEventListener('click', () => clearRoutePoints());
+    }
+
+    if (routeRunBtn) {
+      routeRunBtn.addEventListener('click', async () => {
+        if (routeStatus) routeStatus.textContent = '';
+        const table = routeTableEl ? String(routeTableEl.value || '') : '';
+        if (!table) {
+          alert('请选择已持久化的线图层作为路网（请先加载该图层）');
+          return;
+        }
+        if (!routeStart || !routeEnd) {
+          alert('请先点选起点和终点');
+          return;
+        }
+        const algo = routeAlgoEl ? String(routeAlgoEl.value || 'dijkstra') : 'dijkstra';
+        const outNameRaw = routeOutNameEl ? String(routeOutNameEl.value || '').trim() : '';
+        const outName = outNameRaw || `route_${table}_${algo}_${Date.now()}`;
+
+        try {
+          const res = await fetch(routeUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table, start: routeStart, end: routeEnd, algo }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || `寻路失败：${res.status}`);
+          const fc = data.feature_collection;
+          if (!fc || fc.type !== 'FeatureCollection' || !Array.isArray(fc.features) || !fc.features.length) {
+            throw new Error('后端返回结果为空');
+          }
+
+          const tmpLayer = L.geoJSON(fc, {
+            style: () => ({
+              color: _cssVar('--primary', '#0969da'),
+              weight: 4,
+              opacity: 0.95,
+            }),
+            onEachFeature: (feature, l) => {
+              try { rememberBaseStyle(l); } catch (e) {}
+              try {
+                l.on('click', () => {
+                  toggleFeatureSelection(outName, feature);
+                  const key = _featureKey(feature);
+                  const sel = key ? getSelection(outName) : null;
+                  if (key && sel && sel.ids && sel.ids.has(key)) highlightLayer(l);
+                  else highlightLayer(null);
+                });
+              } catch (e) {}
+            }
+          });
+
+          let outItem = findLayerItemByTable(outName);
+          if (outItem) {
+            if (outItem.dataLayer) {
+              try { outItem.layer.removeLayer(outItem.dataLayer); } catch (e) {}
+            }
+            outItem.dataLayer = tmpLayer;
+            outItem.hasLines = true;
+            outItem.hasPoints = false;
+            outItem.meta = `最短路径结果（来源：${table}；algo=${data.algo_used || algo}；count=${fc.features.length}）`;
+            outItem.layer.addLayer(tmpLayer);
+            ensureTopoOverlays(outItem);
+          } else {
+            const group = L.layerGroup();
+            group.addLayer(tmpLayer);
+            if (map) group.addTo(map);
+            outItem = {
+              table: outName,
+              name: outName,
+              meta: `最短路径结果（来源：${table}；algo=${data.algo_used || algo}；count=${fc.features.length}）`,
+              visible: true,
+              hasLines: true,
+              hasPoints: false,
+              layer: group,
+              dataLayer: tmpLayer,
+              overlays: null,
+            };
+            ensureTopoOverlays(outItem);
+            layersState.push(outItem);
+          }
+          renderLayerList();
+
+          try {
+            const bounds = tmpLayer.getBounds();
+            if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+          } catch (e) { /* ignore */ }
+
+          if (routeOutNameEl && !outNameRaw) routeOutNameEl.value = outName;
+          if (routeStatus) routeStatus.textContent = `寻路完成：共 ${fc.features.length} 条路径（algo=${data.algo_used || algo}）`;
+        } catch (e) {
+          console.error(e);
+          alert(e.message || String(e));
+        }
+      });
+    }
+
+    // --- 轨迹校正 ---
+    try {
+      if (trajTableEl) {
+        trajTableEl.addEventListener('change', () => {
+          try { populateTrajectoryTimeFieldOptions(trajTableEl.value); } catch (e) { /* ignore */ }
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    if (trajRunBtn) {
+      trajRunBtn.addEventListener('click', async () => {
+        if (trajStatus) trajStatus.textContent = '';
+        const trajTable = trajTableEl ? String(trajTableEl.value || '') : '';
+        const roadTable = trajRoadTableEl ? String(trajRoadTableEl.value || '') : '';
+        const timeField = trajTimeFieldEl ? String(trajTimeFieldEl.value || '').trim() : '';
+        const outNameRaw = trajOutNameEl ? String(trajOutNameEl.value || '').trim() : '';
+        const outName = outNameRaw || `traj_corrected_${Date.now()}`;
+        const useBbox = !!(trajUseBboxEl && trajUseBboxEl.checked);
+        let maxPoints = 5000;
+        try { maxPoints = parseInt(String(trajMaxPointsEl ? trajMaxPointsEl.value : '5000'), 10); } catch (e) {}
+        if (!Number.isFinite(maxPoints) || maxPoints <= 0) maxPoints = 5000;
+
+        if (!trajTable) {
+          alert('请选择已持久化的轨迹点图层（请先加载该图层）');
+          return;
+        }
+        if (!roadTable) {
+          alert('请选择已持久化的线图层作为路网（请先加载该图层）');
+          return;
+        }
+        if (!timeField) {
+          alert('请选择/填写时间字段（例如：properties.定位时间）');
+          return;
+        }
+
+        const bbox = (useBbox && map) ? _currentMapBbox() : null;
+
+        try {
+          if (trajStatus) trajStatus.textContent = '正在校正轨迹…';
+          const res = await fetch(trajectoryUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trajectory_table: trajTable,
+              road_table: roadTable,
+              time_field: timeField,
+              bbox,
+              max_points: maxPoints,
+              out_name: outName,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || `轨迹校正失败：${res.status}`);
+
+          const fc = data.feature_collection;
+          if (!fc || fc.type !== 'FeatureCollection' || !Array.isArray(fc.features) || !fc.features.length) {
+            throw new Error('后端返回结果为空');
+          }
+          const realName = String(data.out_name || outName);
+
+          const base = _cssVar('--mapFeature', '#0a3d62');
+          const tmpLayer = L.geoJSON(fc, {
+            pointToLayer: (_f, latlng) => L.circleMarker(latlng, {
+              radius: 5,
+              color: base,
+              weight: 2,
+              opacity: 1,
+              fillColor: base,
+              fillOpacity: 0.7,
+            }),
+            onEachFeature: (feature, l) => {
+              try { rememberBaseStyle(l); } catch (e) {}
+              try {
+                l.on('click', () => {
+                  toggleFeatureSelection(realName, feature);
+                  const key = _featureKey(feature);
+                  const sel = key ? getSelection(realName) : null;
+                  if (key && sel && sel.ids && sel.ids.has(key)) highlightLayer(l);
+                  else highlightLayer(null);
+                });
+              } catch (e) {}
+            }
+          });
+
+          let outItem = findLayerItemByTable(realName);
+          if (outItem) {
+            if (outItem.dataLayer) {
+              try { outItem.layer.removeLayer(outItem.dataLayer); } catch (e) {}
+            }
+            outItem.dataLayer = tmpLayer;
+            outItem.hasLines = false;
+            outItem.hasPoints = true;
+            outItem.meta = `轨迹校正结果（轨迹：${trajTable}；路网：${roadTable}；count=${fc.features.length}）`;
+            outItem.layer.addLayer(tmpLayer);
+            ensureTopoOverlays(outItem);
+          } else {
+            const group = L.layerGroup();
+            group.addLayer(tmpLayer);
+            if (map) group.addTo(map);
+            outItem = {
+              table: realName,
+              name: realName,
+              meta: `轨迹校正结果（轨迹：${trajTable}；路网：${roadTable}；count=${fc.features.length}）`,
+              visible: true,
+              hasLines: false,
+              hasPoints: true,
+              layer: group,
+              dataLayer: tmpLayer,
+              overlays: null,
+            };
+            ensureTopoOverlays(outItem);
+            layersState.push(outItem);
+          }
+          renderLayerList();
+
+          try {
+            const bounds = tmpLayer.getBounds();
+            if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+          } catch (e) { /* ignore */ }
+
+          if (trajOutNameEl && !outNameRaw) trajOutNameEl.value = realName;
+          if (trajStatus) trajStatus.textContent = data.note || `轨迹校正完成：${fc.features.length} 个点`;
+        } catch (e) {
+          console.error(e);
+          if (trajStatus) trajStatus.textContent = '';
+          alert(e.message || String(e));
+        }
+      });
+    }
+
+    // --- 按位置选择 ---
+    let pickingPoint = false;
+    pickPointBtn.addEventListener('click', () => {
+      if (!map) return;
+      pickingPoint = true;
+      locStatus.textContent = '请在地图上点击一个点作为中心…';
+    });
+    if (map) {
+      map.on('click', (ev) => {
+        if (routePickMode === 'start' || routePickMode === 'end') {
+          const latlng = ev.latlng;
+          const xy = { x: Number(latlng.lng.toFixed(6)), y: Number(latlng.lat.toFixed(6)) };
+          if (routePickMode === 'start') {
+            routeStart = xy;
+            _setRouteMarker('start', xy.x, xy.y);
+          } else {
+            routeEnd = xy;
+            _setRouteMarker('end', xy.x, xy.y);
+          }
+          routePickMode = null;
+          _setRouteInput();
+          if (routeStatus) routeStatus.textContent = '已完成点选，可点击“寻路”';
+          return;
+        }
+        if (!pickingPoint) return;
+        pickingPoint = false;
+        const latlng = ev.latlng;
+        locXEl.value = String(latlng.lng.toFixed(6));
+        locYEl.value = String(latlng.lat.toFixed(6));
+        const radius_m = Number((locRadiusEl.value || '').trim());
+        showLocPoint(Number(locXEl.value), Number(locYEl.value), (Number.isFinite(radius_m) && radius_m > 0) ? radius_m : null);
+        locStatus.textContent = `已选点：(${locXEl.value}, ${locYEl.value})`;
+      });
+    }
+
+    function currentRefBboxes(refTable) {
+      const sel = getSelection(refTable);
+      const arr = [];
+      for (const [id, bb] of sel.bboxes.entries()) {
+        if (!Array.isArray(bb) || bb.length < 4) continue;
+        arr.push({ minx: bb[0], miny: bb[1], maxx: bb[2], maxy: bb[3], id });
+      }
+      return arr;
+    }
+
+    locSelectBtn.addEventListener('click', async () => {
+      locStatus.textContent = '';
+      const target = locTargetEl.value;
+      const ref = locRefEl.value;
+      const mode = locModeEl.value;
+      if (!target) {
+        alert('请先加载目标图层');
+        return;
+      }
+      const targetItem = findLayerItemByTable(target);
+      if (!targetItem) {
+        alert('请先加载目标表图层');
+        return;
+      }
+
+      let payload = { target_table: target, mode };
+
+      if (mode === 'point') {
+        const x = Number((locXEl.value || '').trim());
+        const y = Number((locYEl.value || '').trim());
+        const radius_m = Number((locRadiusEl.value || '').trim());
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          alert('请填写有效的 x/y（或使用地图点选）');
+          return;
+        }
+        if (!Number.isFinite(radius_m) || radius_m <= 0) {
+          alert('请填写有效的半径（米）');
+          return;
+        }
+        payload.point = { x, y };
+        payload.radius_m = radius_m;
+
+        // 前端可视化：即使是手动输入，也把点/圆画出来
+        showLocPoint(x, y, radius_m);
+      }
+
+      if (mode === 'bbox_intersects' || mode === 'circle_from_selected') {
+        if (!ref) {
+          alert('请选择参照图层');
+          return;
+        }
+        const refItem = findLayerItemByTable(ref);
+        if (!refItem) {
+          alert('请先加载参照表图层');
+          return;
+        }
+        const refBboxes = currentRefBboxes(ref);
+        if (!refBboxes.length) {
+          alert('参照图层没有“已选择要素”，请先进行一次选择');
+          return;
+        }
+        payload.ref_bboxes = refBboxes;
+
+        if (mode === 'circle_from_selected') {
+          const radius_m = Number((locRadiusEl.value || '').trim());
+          if (!Number.isFinite(radius_m) || radius_m <= 0) {
+            alert('请填写有效的半径（米）');
+            return;
+          }
+          payload.radius_m = radius_m;
+
+          // 可视化：多参照要素 -> 多圆（描边，不会叠加变深）
+          try { showLocCirclesFromRefBboxes(refBboxes, radius_m); } catch (e) { /* ignore */ }
+        }
+      }
+
+      try {
+        const res = await fetch(selectLocUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `选择失败：${res.status}`);
+        }
+        if (!data.ids || !data.ids.length) {
+          alert('未找到符合条件的要素');
+          locStatus.textContent = `未找到要素（目标表：${target}）`;
+          clearSelectionForTable(target);
+          return;
+        }
+        setSelectionForTable(target, data.ids, data.bboxes);
+        locStatus.textContent = `已选择 ${data.count} 个要素（目标表：${target}）`;
+      } catch (e) {
+        console.error(e);
+        alert(e.message || String(e));
+      }
+    });
+
+    locClearBtn.addEventListener('click', () => {
+      const target = locTargetEl.value;
+      if (!target) return;
+      clearSelectionForTable(target);
+      locStatus.textContent = `已清除目标选择（表：${target}）`;
+
+      // 清理范围提示
+      try {
+        if (locPointMarker && map && map.hasLayer(locPointMarker)) map.removeLayer(locPointMarker);
+        if (locRadiusCircle && map && map.hasLayer(locRadiusCircle)) map.removeLayer(locRadiusCircle);
+      } catch (e) {}
+      locPointMarker = null;
+      locRadiusCircle = null;
+      try { _clearLocQueryOverlay(); } catch (e) {}
+    });
+
+    // --- 导出要素 ---
+    function _safeSlug(s) {
+      return String(s || '').trim().replaceAll(/[^a-zA-Z0-9_]+/g, '_').replaceAll(/_+/g, '_').replaceAll(/^_+|_+$/g, '');
+    }
+
+    function _defaultExportTableName(sourceTable) {
+      const base = _safeSlug(sourceTable) || 'layer';
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const stamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      return `${base}_selected_${stamp}`;
+    }
+
+    if (exportToTableEl && exportOutTableEl) {
+      exportToTableEl.addEventListener('change', () => {
+        const on = !!exportToTableEl.checked;
+        exportOutTableEl.disabled = !on;
+        if (on && !(exportOutTableEl.value || '').trim()) {
+          const src = exportTableEl ? exportTableEl.value : '';
+          exportOutTableEl.value = _defaultExportTableName(src);
+        }
+      });
+      exportOutTableEl.disabled = !exportToTableEl.checked;
+    }
+
+    if (exportBtn) {
+      exportBtn.addEventListener('click', async () => {
+        if (exportStatus) exportStatus.textContent = '';
+        const table = exportTableEl ? String(exportTableEl.value || '') : '';
+        if (!table) {
+          alert('请先选择源图层（表）');
+          return;
+        }
+        const item = findLayerItemByTable(table);
+        const sel = getSelection(table);
+        if (!sel || !sel.ids || sel.ids.size === 0) {
+          alert('该图层没有已选择要素，请先选择要素');
+          return;
+        }
+        const to_table = !!(exportToTableEl && exportToTableEl.checked);
+        const to_geojson = !!(exportToGeojsonEl && exportToGeojsonEl.checked);
+        if (!to_table && !to_geojson) {
+          alert('请至少勾选一种导出方式（导出到表 / 导出到 GeoJSON）');
+          return;
+        }
+        const out_table = (exportOutTableEl && exportOutTableEl.value) ? String(exportOutTableEl.value).trim() : '';
+        if (to_table && !out_table) {
+          alert('导出到表需要填写新表名');
+          return;
+        }
+
+        const ids = Array.from(sel.ids.values());
+        const payload = { table, ids, to_table, to_geojson, out_table };
+
+        // 临时图层（不在后端 tables 列表里）需要把 FeatureCollection 一起发给后端做导出/入库
+        try {
+          const known = tables.some((t) => t && t.name === table);
+          if (!known && item && item.dataLayer && item.dataLayer.toGeoJSON) {
+            const fc = item.dataLayer.toGeoJSON();
+            if (fc && fc.type === 'FeatureCollection') {
+              payload.feature_collection = fc;
+            }
+          }
+        } catch (e) { /* ignore */ }
+
+        try {
+          const res = await fetch(exportUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error(data.error || `导出失败：${res.status}`);
+          }
+
+          const parts = [];
+          if (data.exported && data.exported.table) {
+            const t = data.exported.table;
+            parts.push(`已导出到表：${t.table}（${data.count}）`);
+            // 动态加入 tables 下拉（无需刷新页面）
+            try {
+              const cols = t.columns || [];
+              tables.push({ name: t.table, columns: cols });
+              const opt = document.createElement('option');
+              opt.value = t.table;
+              opt.textContent = t.table;
+              tableSelect.appendChild(opt);
+              try { refreshSqlToolTables(); } catch (e) { /* ignore */ }
+            } catch (e) { /* ignore */ }
+          }
+          if (data.exported && data.exported.geojson) {
+            const g = data.exported.geojson;
+            parts.push(`已生成 GeoJSON：${g.filename || ''}`);
+            if (g.download_url) {
+              const a = document.createElement('a');
+              a.href = g.download_url;
+              a.download = g.filename || '';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+            }
+          }
+          if (exportStatus) exportStatus.textContent = parts.join('\n') || `导出成功（${data.count}）`;
+        } catch (e) {
+          console.error(e);
+          alert(e.message || String(e));
+        }
+      });
+    }
+
+    // --- GeoJSON 导入 ---
+    importBtn.addEventListener('click', async () => {
+      importStatus.textContent = '';
+      const tableName = (importTableEl.value || '').trim();
+      const file = importFileEl.files && importFileEl.files[0];
+      if (!tableName) {
+        alert('请填写表名');
+        return;
+      }
+      // 多租户提示：普通用户不要写 admin:xxx / other:xxx
+      try {
+        if (currentUser && String(currentUser).toLowerCase() !== 'admin') {
+          if (tableName.includes(':') || tableName.includes('.')) {
+            const sep = tableName.includes(':') ? ':' : '.';
+            const parts = tableName.split(sep);
+            if (parts.length === 2 && parts[0] && String(parts[0]).toLowerCase() !== String(currentUser).toLowerCase()) {
+              alert(`普通用户不需要写 owner 前缀，请直接写表名（例如：${parts[1]}）`);
+              return;
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+
+      // 预检查：若表已存在，直接提示（后端会拒绝覆盖）
+      try {
+        const want = (String(currentUser).toLowerCase() === 'admin' && !tableName.includes(':') && !tableName.includes('.'))
+          ? `admin:${tableName}`
+          : tableName;
+        const exists = (tables || []).some(t => t && t.name && String(t.name).toLowerCase() === String(want).toLowerCase());
+        if (exists) {
+          alert(`表已存在：${want}\n请换一个新表名，或先在 SQL 页执行 DROP TABLE 后再导入。`);
+          return;
+        }
+      } catch (e) { /* ignore */ }
+
+      if (!file) {
+        alert('请选择 .geojson/.json 文件');
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append('table_name', tableName);
+        fd.append('file', file);
+        const res = await fetch(importUrl, { method: 'POST', body: fd });
+        let data = null;
+        try { data = await res.json(); } catch (_e) { data = null; }
+        if (!res.ok || !data || !data.ok) {
+          let msg = (data && data.error) ? data.error : '';
+          if (!msg) {
+            try {
+              const text = await res.text();
+              msg = (text || '').slice(0, 400);
+            } catch (e) { /* ignore */ }
+          }
+          throw new Error(msg || `导入失败：${res.status}`);
+        }
+        importStatus.textContent = data.message || '导入成功';
+
+        // 动态加入 tables 下拉（无需刷新页面）
+        tables.push({ name: data.table, columns: data.columns || [] });
+        const opt = document.createElement('option');
+        opt.value = data.table;
+        opt.textContent = data.table;
+        tableSelect.appendChild(opt);
+        tableSelect.value = data.table;
+        populateColumns(data.columns || []);
+        try { refreshSqlToolTables(); } catch (e) { /* ignore */ }
+      } catch (e) {
+        console.error(e);
+        alert(e.message || String(e));
+      }
+    });
+
+    // --- 拓扑检查/修复 ---
+    topoClearBtn.addEventListener('click', () => {
+      const table = topoTableEl.value;
+      if (table) {
+        clearTopoOverlays(table);
+        topoStatus.textContent = '已清除标注';
+      }
+    });
+
+    topoCheckBtn.addEventListener('click', async () => {
+      topoStatus.textContent = '';
+      const table = topoTableEl.value;
+      if (!table) {
+        alert('请选择线图层（表）');
+        return;
+      }
+      const item = findLayerItemByTable(table);
+      if (!item) {
+        alert('请先加载该表图层');
+        return;
+      }
+      ensureTopoOverlays(item);
+      clearTopoOverlays(table);
+      try {
+        const res = await fetch(topoCheckUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, bbox: null }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `拓扑检查失败：${res.status}`);
+        }
+        item.overlays.issuesLayer.addData(data.issues);
+
+        topoCheckToken = data.check_token || null;
+        topoCheckTokenTable = table;
+        setTopoRepairEnabled(!!topoCheckToken);
+
+        const byKind = (data.stats && data.stats.issues_by_kind) ? data.stats.issues_by_kind : {};
+        const danglingN = byKind.dangling_endpoint || 0;
+        const crossN = byKind.cross_without_node || 0;
+        const tN = byKind.endpoint_on_segment || 0;
+        const st = data.stats ? `（dangling=${danglingN}，cross=${crossN}，t=${tN}；lines=${data.stats.lines}）` : '';
+        topoStatus.textContent = `检查完成（表：${table}）：已标注 cross/t 问题点（cross=红，t=橙）${st}`;
+      } catch (e) {
+        console.error(e);
+        alert(e.message || String(e));
+      }
+    });
+
+    topoRepairBtn.addEventListener('click', async () => {
+      topoStatus.textContent = '';
+      const table = topoTableEl.value;
+      if (!table) {
+        alert('请选择线图层（表）');
+        return;
+      }
+      const item = findLayerItemByTable(table);
+      if (!item) {
+        alert('请先加载该表图层');
+        return;
+      }
+      const outName = (topoOutNameEl.value || '').trim();
+      if (!outName) {
+        alert('请填写结果图层名');
+        return;
+      }
+      ensureTopoOverlays(item);
+      try {
+        if (!topoCheckToken || topoCheckTokenTable !== table) {
+          alert('请先点击“检查拓扑”，再执行修复');
+          return;
+        }
+        const res = await fetch(topoRepairUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, bbox: null, check_token: topoCheckToken }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `拓扑修复失败：${res.status}`);
+        }
+        const r = data.result || {};
+        const c = r.counts || {};
+        const extra = (c.dangling_deleted !== undefined || c.cross_replaced !== undefined || c.new_lines !== undefined)
+          ? `（短悬挂删=${c.dangling_deleted ?? 0}；交叉替换=${c.cross_replaced ?? 0}；新线段=${c.new_lines ?? 0}）`
+          : '';
+        topoStatus.textContent = (r.message ? `（表：${table}）${r.message}${extra}` : `（表：${table}）修复完成${extra}`);
+        if (Array.isArray(r.new_lines) && r.new_lines.length) {
+          item.overlays.repairsLayer.addData({ type: 'FeatureCollection', features: r.new_lines });
+        }
+
+        // 修复完成：作废 token，强制下一次重新检查
+        topoCheckToken = null;
+        topoCheckTokenTable = null;
+        setTopoRepairEnabled(false);
+
+        // 1) 构造临时“修复后路网”图层（基于当前已加载的要素子集 + 修复新线段）
+        try {
+          const deleted = new Set(Array.isArray(r.deleted) ? r.deleted : []);
+          const base = item.dataLayer ? item.dataLayer.toGeoJSON() : { type: 'FeatureCollection', features: [] };
+          const kept = (base.features || []).filter((f) => {
+            const fid = (f && f.properties && f.properties.id !== undefined) ? f.properties.id : f.id;
+            return !deleted.has(fid);
+          });
+          const merged = {
+            type: 'FeatureCollection',
+            features: kept.concat(Array.isArray(r.new_lines) ? r.new_lines : []),
+          };
+
+          // 用与加载层同样的样式/交互创建图层
+          const tmpLayer = L.geoJSON(merged, {
+            pointToLayer: (_feature, latlng) => L.circleMarker(latlng, {
+              radius: 6,
+              color: _cssVar('--mapFeature', '#0a3d62'),
+              weight: 2,
+              opacity: 1,
+              fillColor: _cssVar('--mapFeature', '#0a3d62'),
+              fillOpacity: 0.7,
+            }),
+            style: (feature) => {
+              const t = (feature && feature.geometry && feature.geometry.type) || '';
+              if (t === 'LineString' || t === 'MultiLineString') {
+                return { color: _cssVar('--mapFeature', '#0a3d62'), weight: 3, opacity: 1 };
+              }
+              return undefined;
+            },
+            onEachFeature: (feature, l) => {
+              try { rememberBaseStyle(l); } catch (e) {}
+              try {
+                l.on('click', () => {
+                  toggleFeatureSelection(outName, feature);
+                  const key = _featureKey(feature);
+                  const sel = key ? getSelection(outName) : null;
+                  if (key && sel && sel.ids && sel.ids.has(key)) {
+                    highlightLayer(l);
+                  } else {
+                    highlightLayer(null);
+                  }
+                });
+              } catch (e) {}
+            }
+          });
+
+          // 加入图层列表（按表名唯一）
+          let outItem = findLayerItemByTable(outName);
+          if (outItem) {
+            if (outItem.dataLayer) {
+              try { outItem.layer.removeLayer(outItem.dataLayer); } catch (e) {}
+            }
+            outItem.dataLayer = tmpLayer;
+            outItem.hasLines = true;
+            outItem.hasPoints = false;
+            outItem.meta = `临时修复图层（来源：${table}）`;
+            outItem.layer.addLayer(tmpLayer);
+            ensureTopoOverlays(outItem);
+          } else {
+            const group = L.layerGroup();
+            group.addLayer(tmpLayer);
+            if (map) group.addTo(map);
+            outItem = {
+              table: outName,
+              name: outName,
+              meta: `临时修复图层（来源：${table}）`,
+              visible: true,
+              hasLines: true,
+              hasPoints: false,
+              layer: group,
+              dataLayer: tmpLayer,
+              overlays: null,
+            };
+            ensureTopoOverlays(outItem);
+            layersState.push(outItem);
+          }
+          renderLayerList();
+        } catch (e) {
+          console.warn('build temp repaired layer failed', e);
+        }
+
+        // 2) 可选持久化保存为新表：调用后端生成新表并加入下拉，用户可用“加载”重新验证
+        if (topoPersistEl.checked) {
+          try {
+            const saveUrl = '{% url "topology_save" %}';
+            const res2 = await fetch(saveUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ source_table: table, output_table: outName }),
+            });
+            const data2 = await res2.json();
+            if (!res2.ok || !data2.ok) {
+              throw new Error(data2.error || `保存失败：${res2.status}`);
+            }
+
+            // 加入 tables 下拉（无需刷新）
+            tables.push({ name: data2.table, columns: data2.columns || [] });
+            const opt = document.createElement('option');
+            opt.value = data2.table;
+            opt.textContent = data2.table;
+            tableSelect.appendChild(opt);
+            try { refreshSqlToolTables(); } catch (e) { /* ignore */ }
+            topoStatus.textContent = `${topoStatus.textContent}；${data2.message || '已保存为新表'}`;
+          } catch (e) {
+            console.error(e);
+            alert(e.message || String(e));
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        alert(e.message || String(e));
+      }
+    });
+
+    renderLayerList();
+  </script>
+</body>
+</html>

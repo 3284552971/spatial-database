@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "users": {
+    "admin": {
+      "salt": "kARbfLxdQM73ZILFK6yajQ==",
+      "digest": "JA7sgW5KEy1lQu8IOMAHlquo7ygfvnQKL18Z1pPGSGk=",
+      "rounds": 200000
+    },
+    "NCW": {
+      "salt": "5hES109vsyiJaNZtt9nRig==",
+      "digest": "TThZz1C0dpOjnygEzGnzoQOYIp1lrnKQQd/B9QiS8/o=",
+      "rounds": 200000
+    },
+    "jyw": {
+      "salt": "SANp8pmT6iWYWg4DOnsPIw==",
+      "digest": "koRU3oUPVul02g72glxohWVIf818O79PCGLgEq6/F+4=",
+      "rounds": 200000
+    },
+    "ua95ef7": {
+      "salt": "8m/cSGBnv99yoG7BpOhd5g==",
+      "digest": "mvc8HjsYoJ/AMgvO2SUhxCRMePWEDVHqgGt0FpRPac4=",
+      "rounds": 200000
+    }
+  }
+}

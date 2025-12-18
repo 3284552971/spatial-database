@@ -1,0 +1,6 @@
+asgiref==3.8.1
+backports.zoneinfo==0.2.1; python_version < "3.9"
+Django==4.2.26
+PyYAML==6.0.3
+sqlparse==0.5.3
+typing_extensions==4.13.2

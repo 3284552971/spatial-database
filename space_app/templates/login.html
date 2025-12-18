@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  {% load static %}
+  <meta charset="utf-8">
+  <title>登录</title>
+  <link rel="stylesheet" href="{% static 'space_app/theme.css' %}" />
+  <style>
+    body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .card { background: var(--panel); padding: 24px; border-radius: 8px; box-shadow: 0 10px 30px var(--shadow); width: 320px; border: 1px solid var(--border); }
+    h1 { margin: 0 0 16px; font-size: 20px; text-align: center; }
+    .tabs { display:flex; gap:8px; margin-bottom: 12px; }
+    .tab { flex: 1 1 0; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 13px; }
+    .tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    label { display: block; margin: 10px 0 6px; font-size: 13px; color: var(--muted); }
+    input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; background: var(--panel2); color: var(--text); caret-color: var(--text); }
+    button { margin-top: 16px; width: 100%; padding: 10px; background: var(--primary); color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: var(--primaryHover); }
+    .link-bar { margin-top: 12px; text-align: center; font-size: 13px; }
+    .link-bar a { margin: 0 6px; color: var(--link); text-decoration: none; }
+    .link-bar a:hover { text-decoration: underline; }
+    .error { color: #c00; margin-top: 10px; text-align: center; font-size: 13px; }
+    .message { color: var(--muted); margin-top: 10px; text-align: center; font-size: 13px; }
+    .hidden { display: none; }
+    /* 登录页：右上角小主题按钮 */
+    .theme-toggle.floating{
+      width: 38px;
+      height: 32px;
+      padding: 0;
+      border-radius: 10px;
+      justify-content: center;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle floating" type="button" data-theme-toggle>暗色</button>
+  <div class="card">
+    <h1>空间系统</h1>
+    <div class="tabs">
+      <button id="tabLogin" class="tab active" type="button">登录</button>
+      <button id="tabRegister" class="tab" type="button">创建用户</button>
+    </div>
+
+    <form id="loginForm" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="login" />
+      <label for="username">用户名</label>
+      <input id="username" name="username" type="text" required autofocus>
+
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" required>
+
+      <button type="submit">登录</button>
+      {% if error %}
+        <div class="error">{{ error }}</div>
+      {% endif %}
+      {% if message %}
+        <div class="message">{{ message }}</div>
+      {% endif %}
+    </form>
+
+    <form id="registerForm" method="post" class="hidden">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="register" />
+      <label for="reg_username">用户名</label>
+      <input id="reg_username" name="username" type="text" placeholder="字母/数字/_/-，3~32 位" required>
+
+      <label for="reg_password">密码</label>
+      <input id="reg_password" name="password" type="password" required>
+
+      <label for="reg_confirm">确认密码</label>
+      <input id="reg_confirm" name="confirm_password" type="password" required>
+
+      <button type="submit">创建用户</button>
+    </form>
+    <div class="link-bar">
+      <a href="{% url 'map' %}">地图</a> | <a href="{% url 'sql' %}">SQL</a> | <a href="{% url 'docs' %}">文档</a>
+    </div>
+  </div>
+  <script defer src="{% static 'space_app/theme.js' %}"></script>
+  <script>
+    (function(){
+      const tabLogin = document.getElementById('tabLogin');
+      const tabRegister = document.getElementById('tabRegister');
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+
+      function show(which){
+        const isLogin = which === 'login';
+        tabLogin.classList.toggle('active', isLogin);
+        tabRegister.classList.toggle('active', !isLogin);
+        loginForm.classList.toggle('hidden', !isLogin);
+        registerForm.classList.toggle('hidden', isLogin);
+        try {
+          const el = document.getElementById(isLogin ? 'username' : 'reg_username');
+          if (el) el.focus();
+        } catch (e) {}
+      }
+
+      tabLogin.addEventListener('click', () => show('login'));
+      tabRegister.addEventListener('click', () => show('register'));
+    })();
+  </script>
+</body>
+</html>

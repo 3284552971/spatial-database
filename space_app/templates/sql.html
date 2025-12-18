@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  {% load helpers static %}
+  <meta charset="utf-8">
+  <title>SQL 查询</title>
+  <link rel="stylesheet" href="{% static 'space_app/theme.css' %}" />
+  <style>
+    body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
+    header { background: var(--header); color: var(--headerText); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .wrapper { max-width: 1100px; margin: 24px auto; background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    textarea { width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+    button { margin-top: 12px; padding: 10px 18px; background: var(--primary); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    button:not(.secondary):hover { background: var(--primaryHover); }
+    .status { margin-top: 10px; font-size: 14px; }
+    .error { color: #c00; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    th, td { border: 1px solid var(--border); padding: 8px; text-align: left; }
+    th { background: var(--panel2); }
+    .nav a { color: #fff; margin-left: 12px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>SQL 查询</div>
+    <div class="nav">
+      <span>用户：{{ user }}</span>
+      <button class="theme-toggle" type="button" data-theme-toggle>暗色</button>
+      <a href="{% url 'map' %}">地图</a>
+      <a href="{% url 'sql' %}">SQL</a>
+      <a href="{% url 'docs' %}">文档</a>
+      <a href="{% url 'logout' %}">退出</a>
+    </div>
+  </header>
+  <div class="wrapper">
+    <form method="post">
+      {% csrf_token %}
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <label for="sql-keyword" style="white-space:nowrap;">关键字：</label>
+        <select id="sql-keyword" style="padding:8px; border:1px solid #ccc; border-radius:6px;">
+          <option value="SELECT">SELECT</option>
+          <option value="INSERT">INSERT</option>
+          <option value="UPDATE">UPDATE</option>
+          <option value="DELETE">DELETE</option>
+          <option value="CREATE">CREATE</option>
+          <option value="DROP">DROP</option>
+        </select>
+        <button id="fill-template" type="button" style="margin-top:0;">填充模板</button>
+      </div>
+      <label for="sql">输入 SQL：</label>
+      <textarea id="sql" name="sql" placeholder="例如：SELECT * FROM roads_sz WHERE id > 10 LIMIT 20">{{ sql|default:'' }}</textarea>
+      <div style="margin-top:8px; font-size:12px; color:#666;">可用表：{{ tables|join:', ' }}</div>
+      <div style="margin-top:6px; font-size:12px; color:var(--muted); line-height:1.6;">
+        表引用支持：<code>table</code> / <code>owner:table</code>（兼容 <code>owner.table</code>）。删表命令：<code>DROP TABLE owner:table;</code>
+      </div>
+      <button type="submit">执行</button>
+    </form>
+
+    <script>
+      (function () {
+        const templates = {
+          SELECT: "SELECT * FROM <table> WHERE <col>=<value> LIMIT 20;",
+          INSERT: "INSERT INTO <table> (<col1>, <col2>) VALUES (<val1>, <val2>);",
+          UPDATE: "UPDATE <table> SET <col>=<value> WHERE <col>=<value>;",
+          DELETE: "DELETE FROM <table> WHERE <col>=<value>;",
+          CREATE: "CREATE TABLE <table> (id INT PRIMARY KEY, name TEXT);",
+          DROP: "DROP TABLE <table>;",
+        };
+
+        const keyword = document.getElementById('sql-keyword');
+        const textarea = document.getElementById('sql');
+        const btn = document.getElementById('fill-template');
+
+        function guessKeywordFromText() {
+          const text = (textarea.value || '').trim();
+          const head = text.split(/\s+/, 1)[0];
+          const upper = (head || '').toUpperCase();
+          if (templates[upper]) keyword.value = upper;
+        }
+
+        btn.addEventListener('click', function () {
+          const k = keyword.value;
+          const tpl = templates[k] || '';
+          if (!tpl) return;
+          textarea.value = tpl;
+          textarea.focus();
+        });
+
+        // 进入页面时，如果 textarea 已有 SQL，自动选中对应关键字
+        guessKeywordFromText();
+      })();
+    </script>
+    {% if message %}
+      <div class="status">{{ message }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="status error">{{ error }}</div>
+    {% endif %}
+    {% if rows %}
+      <table>
+        <thead>
+          <tr>
+            {% for col in columns %}
+              <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for col in columns %}
+                <td>{{ row|get_item:col }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+  <script defer src="{% static 'space_app/theme.js' %}"></script>
+</body>
+</html>

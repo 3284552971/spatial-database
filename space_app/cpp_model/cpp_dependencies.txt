@@ -1,0 +1,3 @@
+yaml-cpp (YAML parsing; brew install yaml-cpp)
+pybind11 (Python bindings; brew install pybind11)
+nlohmann-json (JSON/GeoJSON parsing; brew install nlohmann-json)

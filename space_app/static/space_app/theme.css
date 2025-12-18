@@ -1,0 +1,110 @@
+:root{
+  /* GitHub-ish light */
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --panel2: #f6f8fa;
+  --text: #24292f;
+  --muted: #57606a;
+  --border: #d0d7de;
+  --shadow: rgba(31,35,40,0.15);
+  --header: #0a3d62;
+  --headerText: #ffffff;
+  --primary: #0969da;
+  --primaryHover: #0550ae;
+  /* secondary buttons: light cyan/teal */
+  --secondary: #06b6d4;
+  --secondaryHover: #0891b2;
+  --link: #0969da;
+  --focus: rgba(9,105,218,0.35);
+  --mapFeature: #0a3d62;
+  --codeBg: #f6f8fa;
+  --codeText: #24292f;
+}
+
+:root[data-theme="dark"]{
+  /* GitHub-ish dark */
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel2: #0f141b;
+  --text: #c9d1d9;
+  --muted: #8b949e;
+  --border: #30363d;
+  --shadow: rgba(0,0,0,0.55);
+  --header: #0b1f33;
+  --headerText: #c9d1d9;
+  --primary: #1f6feb;
+  --primaryHover: #1158c7;
+  --secondary: #22d3ee;
+  --secondaryHover: #06b6d4;
+  --link: #58a6ff;
+  --focus: rgba(88,166,255,0.35);
+  --mapFeature: #58a6ff;
+  --codeBg: #0f141b;
+  --codeText: #c9d1d9;
+}
+
+html, body{
+  background: var(--bg);
+  color: var(--text);
+}
+
+a{ color: var(--link); }
+
+/* Controls */
+input, select, textarea{
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+input::placeholder, textarea::placeholder{ color: var(--muted); }
+input:focus, select:focus, textarea:focus{
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+  border-color: transparent;
+}
+
+/* Chrome/Safari autofill can force a light background; normalize to theme colors */
+input:-webkit-autofill,
+textarea:-webkit-autofill,
+select:-webkit-autofill{
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  transition: background-color 9999s ease-out 0s;
+  box-shadow: 0 0 0 1000px var(--panel2) inset;
+  -webkit-box-shadow: 0 0 0 1000px var(--panel2) inset;
+}
+
+.theme-toggle{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.10);
+  color: var(--headerText);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+:root[data-theme="dark"] .theme-toggle{
+  border-color: rgba(231,234,240,0.22);
+  background: rgba(231,234,240,0.08);
+}
+
+.theme-toggle.floating{
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 3000;
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 10px 24px var(--shadow);
+}
+
+button{ color: inherit; }
+
+button.secondary:hover{
+  background: var(--secondaryHover);
+}

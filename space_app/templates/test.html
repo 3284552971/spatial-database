@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">    
+<head>
+    {% load static %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Test Page</title>
+    <link rel="stylesheet" href="{% static 'space_app/theme.css' %}" />
+</head>
+<body>
+    <button class="theme-toggle floating" type="button" data-theme-toggle>暗色</button>
+    <div>
+        {% if user %}
+            <p>你好，{{ user }}。<a href="{% url 'logout' %}">退出</a></p>
+        {% endif %}
+    </div>
+    {% for i in datas %}
+    <h1>{{ i }}</h1>
+    {% endfor %}
+    <script defer src="{% static 'space_app/theme.js' %}"></script>
+</body>
+</html>

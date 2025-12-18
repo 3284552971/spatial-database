@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  {% load static %}
+  <meta charset="utf-8">
+  <title>项目文档</title>
+  <link rel="stylesheet" href="{% static 'space_app/theme.css' %}" />
+  <style>
+    body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
+    header { background: var(--header); color: var(--headerText); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .nav a { color: #fff; margin-left: 12px; text-decoration: none; }
+    .wrap { max-width: 1200px; margin: 18px auto; padding: 0 14px; }
+    .bar { display:flex; gap:10px; align-items:center; justify-content: space-between; padding: 12px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+    .bar-left { display:flex; gap:10px; align-items:center; }
+    select { padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); }
+    .muted { color: var(--muted); font-size: 12px; }
+    .doc { margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .doc h1, .doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { margin: 18px 0 10px; }
+    .doc h1 { font-size: 22px; }
+    .doc h2 { font-size: 18px; }
+    .doc h3 { font-size: 16px; }
+    .doc p { line-height: 1.7; margin: 10px 0; }
+    .doc ul, .doc ol { padding-left: 22px; line-height: 1.7; }
+    .doc li { margin: 4px 0; }
+    .doc code { background: var(--codeBg); color: var(--codeText); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+    .doc pre { background: var(--codeBg); color: var(--codeText); padding: 12px 14px; border-radius: 10px; overflow: auto; border: 1px solid var(--border); }
+    .doc pre code { background: transparent; padding: 0; }
+    .doc a { color: var(--primary); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>项目文档</div>
+    <div class="nav">
+      {% if logged_in %}
+        <span>用户：{{ user }}</span>
+        <button class="theme-toggle" type="button" data-theme-toggle>暗色</button>
+        <a href="{% url 'map' %}">地图</a>
+        <a href="{% url 'sql' %}">SQL</a>
+        <a href="{% url 'docs' %}">文档</a>
+        <a href="{% url 'logout' %}">退出</a>
+      {% else %}
+        <button class="theme-toggle" type="button" data-theme-toggle>暗色</button>
+        <a href="{% url 'login' %}">登录</a>
+        <a href="{% url 'docs' %}">文档</a>
+      {% endif %}
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="bar">
+      <div class="bar-left">
+        <label for="docSel" class="muted">选择文档</label>
+        <select id="docSel">
+          {% for d in docs %}
+            <option value="{{ d.key }}" {% if d.key == doc_key %}selected{% endif %}>{{ d.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="muted">{{ doc_path }}</div>
+    </div>
+
+    <div class="doc">
+      {{ doc_html }}
+    </div>
+  </div>
+
+  <script defer src="{% static 'space_app/theme.js' %}"></script>
+  <script>
+    (function () {
+      const sel = document.getElementById('docSel');
+      if (!sel) return;
+      sel.addEventListener('change', () => {
+        const key = sel.value || 'root';
+        const url = new URL(window.location.href);
+        url.searchParams.set('doc', key);
+        window.location.href = url.toString();
+      });
+    })();
+  </script>
+</body>
+</html>
